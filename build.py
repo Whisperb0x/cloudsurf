@@ -196,9 +196,64 @@ def remove_tree(path):
     return not path.exists()
 
 
+# Asset groups the package builder only copies (see PackageDefinitions): these
+# can be refreshed in the built package without the sim. Everything else is
+# compiled by Build All.
+COPY_GROUPS = ["html_ui", "Modules"]
+COMPILED_GROUPS = ["VisualEffectLibs", "MaterialLibs", "InGamePanels"]
+
+
+def refresh_copies():
+    """Bring the copy-only files of the built package up to date with
+    PackageSources (module, panel, icon) and fix layout.json and manifest.json
+    to match. Stops if compiled sources changed since the last Build All."""
+    layout_path = BUILT_PACKAGE / "layout.json"
+    # when the sim last compiled (refreshing rewrites layout.json, so not that)
+    built_at = max(p.stat().st_mtime for p in (BUILT_PACKAGE / "VisualEffectLibs").rglob("*.spb"))
+    # (InGamePanels is compiled too, but build.py rewrites the same XML every run.)
+    stale = [p for g in COMPILED_GROUPS if g != "InGamePanels" for p in (PROJECT_SRC / g).rglob("*")
+             if p.is_file() and p.stat().st_mtime > built_at + 2]
+    if stale:
+        sys.exit("Effects or materials changed since the last Build All; build in the sim first:\n  "
+                 + "\n  ".join(str(p.relative_to(PROJECT_SRC)) for p in stale))
+    layout = json.loads(read_raw(layout_path))
+    entries = {e["path"]: e for e in layout["content"]}
+    changed = []
+    for group in COPY_GROUPS:
+        for src in (PROJECT_SRC / group).rglob("*"):
+            if not src.is_file():
+                continue
+            rel = src.relative_to(PROJECT_SRC)
+            dst = BUILT_PACKAGE / rel
+            if dst.exists() and dst.read_bytes() == src.read_bytes():
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            st = dst.stat()
+            key = rel.as_posix().lower()
+            entry = entries.get(key)
+            if entry is None:
+                entry = {"path": key}
+                layout["content"].append(entry)
+                entries[key] = entry
+            # FILETIME: 100 ns ticks since 1601
+            entry["size"] = st.st_size
+            entry["date"] = int(st.st_mtime * 10_000_000) + 116444736000000000
+            changed.append(key)
+    if not changed:
+        return
+    write_raw(layout_path, json.dumps(layout, indent=2))
+    manifest_path = BUILT_PACKAGE / "manifest.json"
+    manifest = json.loads(read_raw(manifest_path))
+    manifest["total_package_size"] = str(sum(e["size"] for e in layout["content"]))
+    write_raw(manifest_path, json.dumps(manifest, indent=2))
+    print("Refreshed in the built package: " + ", ".join(changed))
+
+
 def install(community):
     if not (BUILT_PACKAGE / "layout.json").exists():
         sys.exit(f"Not built yet: {BUILT_PACKAGE}. Build All in the sim first.")
+    refresh_copies()
     for name in LEGACY_PACKAGES:
         old = community / name
         if old.exists():
