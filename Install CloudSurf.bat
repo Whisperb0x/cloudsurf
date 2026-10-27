@@ -1,6 +1,6 @@
 @echo off
-rem Copies the CloudPass package built by the sim (msfs-project\Packages) to
-rem your Community folder. Build it first: Dev Mode > open msfs-project\CloudPass.xml
+rem Copies the CloudSurf package built by the sim (msfs-project\Packages) to
+rem your Community folder. Build it first: Dev Mode > open msfs-project\CloudSurf.xml
 rem > Build All. Restart the sim afterwards.
 setlocal
 cd /d "%~dp0"

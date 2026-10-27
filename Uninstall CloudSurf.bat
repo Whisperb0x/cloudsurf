@@ -1,5 +1,5 @@
 @echo off
-rem Removes CloudPass (and older CloudPass versions) from your Community folder.
+rem Removes CloudSurf (and older CloudSurf versions) from your Community folder.
 setlocal
 cd /d "%~dp0"
 where python >nul 2>nul

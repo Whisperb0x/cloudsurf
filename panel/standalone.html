@@ -9,7 +9,7 @@
     <script type="text/javascript" src="/JS/dataStorage.js"></script>
     <script type="text/javascript" src="/JS/Services/ToolBarPanels.js"></script>
     <script type="text/javascript">
-class IngamePanelCloudPass extends TemplateElement {
+class IngamePanelCloudSurf extends TemplateElement {
     constructor() {
         super(...arguments);
     }
@@ -17,7 +17,7 @@ class IngamePanelCloudPass extends TemplateElement {
         super.connectedCallback();
     }
 }
-window.customElements.define("ingamepanel-cloudpass", IngamePanelCloudPass);
+window.customElements.define("ingamepanel-cloudsurf", IngamePanelCloudSurf);
 if (typeof checkAutoload !== "undefined") {
     checkAutoload();
 }
@@ -26,19 +26,19 @@ if (typeof checkAutoload !== "undefined") {
     <link rel="import" href="/templates/ingameUiHeader/ingameUiHeader.html" />
     <style>
 /*@STANDALONE_CSS@*/
-/*@CLOUDPASS_CSS@*/
+/*@CLOUDSURF_CSS@*/
     </style>
 </head>
 <body class="border-box">
-    <ingamepanel-cloudpass>
-        <ingame-ui id="CloudPassPanel" panel-id="PANEL_CLOUDPASS" title="CloudPass" class="ingameUiFrame panelInvisible" content-fit="true" resize="both" min-width="420" min-height="300">
-            <div class="cp-scroll">
-<!--@CLOUDPASS_SECTION@-->
+    <ingamepanel-cloudsurf>
+        <ingame-ui id="CloudSurfPanel" panel-id="PANEL_CLOUDSURF" title="CloudSurf" class="ingameUiFrame panelInvisible" content-fit="true" resize="both" min-width="420" min-height="300">
+            <div class="cs-scroll">
+<!--@CLOUDSURF_SECTION@-->
             </div>
         </ingame-ui>
-    </ingamepanel-cloudpass>
+    </ingamepanel-cloudsurf>
     <script type="text/javascript">
-/*@CLOUDPASS_JS@*/
+/*@CLOUDSURF_JS@*/
     </script>
 </body>
 </html>

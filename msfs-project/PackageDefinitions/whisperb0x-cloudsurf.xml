@@ -2,7 +2,7 @@
 <AssetPackage Version="0.2.0">
 	<ItemSettings>
 		<ContentType>MISC</ContentType>
-		<Title>CloudPass</Title>
+		<Title>CloudSurf</Title>
 		<Manufacturer/>
 		<Creator>whisperb0x</Creator>
 	</ItemSettings>
@@ -17,24 +17,24 @@
 			<Flags>
 				<FSXCompatibility>false</FSXCompatibility>
 			</Flags>
-			<AssetDir>PackageDefinitions\whisperb0x-cloudpass\ContentInfo</AssetDir>
-			<OutputDir>ContentInfo\whisperb0x-cloudpass</OutputDir>
+			<AssetDir>PackageDefinitions\whisperb0x-cloudsurf\ContentInfo</AssetDir>
+			<OutputDir>ContentInfo\whisperb0x-cloudsurf</OutputDir>
 		</AssetGroup>
 		<AssetGroup Name="VisualEffectLib">
 			<Type Version="0">VisualEffectLib</Type>
 			<Flags>
 				<FSXCompatibility>false</FSXCompatibility>
 			</Flags>
-			<AssetDir>PackageSources\VisualEffectLibs\cloudpass\VisualEffectLib\</AssetDir>
-			<OutputDir>VisualEffectLibs\cloudpass\VisualEffectLib\</OutputDir>
+			<AssetDir>PackageSources\VisualEffectLibs\cloudsurf\VisualEffectLib\</AssetDir>
+			<OutputDir>VisualEffectLibs\cloudsurf\VisualEffectLib\</OutputDir>
 		</AssetGroup>
 		<AssetGroup Name="MaterialLib">
 			<Type Version="0">MaterialLib</Type>
 			<Flags>
 				<FSXCompatibility>false</FSXCompatibility>
 			</Flags>
-			<AssetDir>PackageSources\MaterialLibs\cloudpass\</AssetDir>
-			<OutputDir>MaterialLibs\cloudpass\</OutputDir>
+			<AssetDir>PackageSources\MaterialLibs\cloudsurf\</AssetDir>
+			<OutputDir>MaterialLibs\cloudsurf\</OutputDir>
 		</AssetGroup>
 		<AssetGroup Name="InGamePanels">
 			<Type Version="0">SPB</Type>

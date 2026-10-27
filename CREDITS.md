@@ -1,8 +1,8 @@
 # Credits
 
-- **CloudPass**: whisperb0x and contributors.
+- **CloudSurf**: whisperb0x and contributors.
 - **Cloud wisp textures** (`textures/wisps`, `textures/CloudWispAtlas.png` and
-  the atlas in `msfs-project/PackageSources/MaterialLibs/cloudpass/textures`):
+  the atlas in `msfs-project/PackageSources/MaterialLibs/cloudsurf/textures`):
   converted from *2D Cloud Textures Pack* (images 0078–0094), an open-source
   game design pack, free for commercial use.
   Source: TODO add link and author.

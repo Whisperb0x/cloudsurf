@@ -1,4 +1,4 @@
-"""Live monitor for CloudPass: logs the module's L:vars and the relevant sim
+"""Live monitor for CloudSurf: logs the module's L:vars and the relevant sim
 variables every frame via SimConnect. Based on the A350 wingflex monitor.
 
   python tools/live_monitor.py            wait for the sim, log to logs/live_<time>.csv, Ctrl+C to stop
@@ -26,7 +26,7 @@ SIM_VARS = [  # (column, simvar, units)
     ("beacon", "LIGHT BEACON", "bool"),
     ("landing", "LIGHT LANDING", "bool"),
 ]
-MOD_VARS = ["HEARTBEAT", "STATE", "ACTIVE", "SPAWNS", "FAILS", "LAST_LEAD", "DENS",
+MOD_VARS = ["HEARTBEAT", "STATE", "ACTIVE", "SPAWNS", "FAILS", "LAST_LEAD", "DENS", "FADE",
             "ENABLE", "TEST", "ALT_FEET", "LEAD_MIN", "LEAD_MAX", "SPACING", "FULL_PCT", "MAX_ALIVE", "MULT",
             "EFFECT", "DENS_VAR", "CLUSTER", "ALT_OFFSET", "VERTICAL", "HOLE", "LATERAL"]
 
@@ -36,7 +36,7 @@ RECV_EXCEPTION, RECV_QUIT, RECV_SIMOBJECT_DATA = 1, 3, 8
 
 
 class SimConnect:
-    def __init__(self, dll_path, name="CloudPass Monitor"):
+    def __init__(self, dll_path, name="CloudSurf Monitor"):
         d = ctypes.WinDLL(dll_path); self.d = d
         H = wintypes.HANDLE; D = wintypes.DWORD
         d.SimConnect_Open.argtypes = [ctypes.POINTER(H), ctypes.c_char_p, wintypes.HWND, D, H, D]
@@ -87,7 +87,7 @@ def main():
     a = ap.parse_args()
     dll = find_dll(a.dll)
     columns = [c for c, _, _ in SIM_VARS] + MOD_VARS
-    watches = [(c, n, u) for c, n, u in SIM_VARS] + [(v, f"L:CLOUDPASS_{v}", "number") for v in MOD_VARS]
+    watches = [(c, n, u) for c, n, u in SIM_VARS] + [(v, f"L:CLOUDSURF_{v}", "number") for v in MOD_VARS]
 
     while True:
         try:

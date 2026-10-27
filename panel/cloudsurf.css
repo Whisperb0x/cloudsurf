@@ -1,0 +1,93 @@
+/* CloudSurf panel section; the ctrl-* base classes are in standalone.css. */
+.cs-box { flex-direction: column; align-items: stretch; }
+.cs-row { margin-top: 6px; }
+
+/* status: dot + two lines, coloured by state */
+.cs-status {
+	display: flex;
+	align-items: center;
+	margin-bottom: 10px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	background: rgba(23, 32, 41, 0.92);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cs-dot {
+	width: 14px;
+	height: 14px;
+	border-radius: 7px;
+	margin-right: 12px;
+	flex-shrink: 0;
+	background: #5b6672;
+}
+.cs-status-text p { margin: 0; }
+.cs-status-main { font-size: 17px; font-weight: bold; }
+.cs-status-sub { font-size: 12px; color: #8b98a5; margin-top: 2px; }
+.cs-in .cs-dot { background: #5fd38d; }
+.cs-in { border-color: rgba(95, 211, 141, 0.45); }
+.cs-fade .cs-dot { background: #e0b84f; }
+.cs-clear .cs-dot { background: #6aa8ff; }
+
+/* segmented choice */
+.cs-label {
+	margin: 12px 2px 6px 2px;
+	font-size: 12px;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #8b98a5;
+}
+.cs-seg { display: flex; }
+.cs-seg-btn {
+	flex: 1;
+	margin-right: 6px;
+	padding: 8px 6px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background: rgba(255, 255, 255, 0.06);
+	color: #e6edf3;
+	font-size: 14px;
+	cursor: pointer;
+	text-align: center;
+}
+.cs-seg-btn:last-child { margin-right: 0; }
+.cs-seg-btn span { display: block; font-size: 11px; color: #8b98a5; margin-top: 2px; }
+.cs-seg-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.cs-seg-btn.cs-on { background: #6c63ff; border-color: #6c63ff; color: #ffffff; }
+.cs-seg-btn.cs-on span { color: #dcd9ff; }
+
+/* advanced */
+.cs-buttons { display: flex; flex-wrap: wrap; margin-top: 8px; }
+.cs-effect { display: flex; align-items: center; margin-top: 8px; }
+.cs-effect p { margin-right: 12px; }
+.cs-effect .cs-btn { margin: 0 8px; }
+.cs-btn {
+	margin: 0 8px 6px 0;
+	padding: 6px 12px;
+	border-radius: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	cursor: pointer;
+}
+.cs-btn:hover { background: rgba(255, 255, 255, 0.2); }
+/* Coherent GT has no CSS grid; two columns via flex-wrap. */
+.cs-grid {
+	display: flex;
+	flex-wrap: wrap;
+	margin-top: 8px;
+	font-size: 0.9em;
+}
+.cs-grid span { width: 50%; padding: 2px 0; opacity: 0.75; }
+.cs-grid .cs-val { opacity: 1; font-weight: bold; }
+.cs-ok { color: #7dff9a; }
+.cs-bad { color: #ff7d7d; }
+.cs-log {
+	margin-top: 8px;
+	padding: 6px 8px;
+	min-height: 4em;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.35);
+	font-family: monospace;
+	font-size: 0.8em;
+	white-space: pre-wrap;
+}

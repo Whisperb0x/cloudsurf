@@ -1,58 +1,81 @@
-                                <!-- CloudPass: begin -->
-                                <p class="ctrl-section-label">CloudPass</p>
-                                <div class="ctrl-master-big cp-box">
-                                    <div class="ctrl-master-toggle">
-                                        <p>Clouds passing by when flying through clouds</p>
-                                        <input type="checkbox" id="cpEnable" checked />
-                                    </div>
-                                    <div id="cpMain"></div>
-                                    <div class="ctrl-master-toggle">
-                                        <p>Landing light beam in cloud</p>
-                                        <input type="checkbox" id="cpBeam" checked />
-                                    </div>
-                                    <div class="ctrl-master-toggle">
-                                        <p>Show debug tools</p>
-                                        <input type="checkbox" id="cpShowDebug" />
+                                <!-- CloudSurf: begin -->
+                                <div class="cs-status" id="csStatus">
+                                    <span class="cs-dot" id="csDot"></span>
+                                    <div class="cs-status-text">
+                                        <p class="cs-status-main" id="csStatusMain">Waiting for the sim</p>
+                                        <p class="cs-status-sub" id="csStatusSub">-</p>
                                     </div>
                                 </div>
 
-                                <div id="cpDebug" style="display: none;">
-                                <p class="ctrl-section-label">CloudPass debug</p>
-                                <div class="ctrl-master-big cp-box">
-                                    <div class="cp-effect">
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="ctrl-master-toggle">
+                                        <p>Fly through clouds</p>
+                                        <input type="checkbox" id="csEnable" checked />
+                                    </div>
+
+                                    <p class="cs-label">Cloud style</p>
+                                    <div class="cs-seg" id="csStyle">
+                                        <button class="cs-seg-btn" data-effect="-1">Full<span>wisps + clouds</span></button>
+                                        <button class="cs-seg-btn" data-effect="0">Classic<span>clouds only</span></button>
+                                    </div>
+
+                                    <p class="cs-label">Performance</p>
+                                    <div class="cs-seg" id="csPreset">
+                                        <button class="cs-seg-btn" data-preset="performance">Performance<span>light on FPS</span></button>
+                                        <button class="cs-seg-btn" data-preset="balanced">Balanced<span>default</span></button>
+                                        <button class="cs-seg-btn" data-preset="quality">Quality<span>most clouds</span></button>
+                                    </div>
+
+                                    <div id="csMain"></div>
+
+                                    <div class="ctrl-master-toggle">
+                                        <p>Landing light beam in cloud</p>
+                                        <input type="checkbox" id="csBeam" checked />
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Advanced and debug tools</p>
+                                        <input type="checkbox" id="csShowDebug" />
+                                    </div>
+                                </div>
+
+                                <div id="csDebug" style="display: none;">
+                                <p class="ctrl-section-label">Advanced</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="cs-effect">
                                         <p>Effect</p>
-                                        <button class="cp-btn" id="cpEffectPrev">&lt;</button>
-                                        <span class="cp-val" id="cpEffectName">-</span>
-                                        <button class="cp-btn" id="cpEffectNext">&gt;</button>
+                                        <button class="cs-btn" id="csEffectPrev">&lt;</button>
+                                        <span class="cs-val" id="csEffectName">-</span>
+                                        <button class="cs-btn" id="csEffectNext">&gt;</button>
                                     </div>
                                     <div class="ctrl-master-toggle">
                                         <p>Test mode (spawn also in clear sky)</p>
-                                        <input type="checkbox" id="cpTest" />
+                                        <input type="checkbox" id="csTest" />
                                     </div>
                                     <div class="ctrl-master-toggle">
                                         <p>Altitude in feet</p>
-                                        <input type="checkbox" id="cpAltFeet" />
+                                        <input type="checkbox" id="csAltFeet" />
                                     </div>
-                                    <div class="cp-buttons">
-                                        <button class="cp-btn" id="cpSpawnNow">Spawn one now</button>
-                                        <button class="cp-btn" id="cpClear">Clear all</button>
-                                        <button class="cp-btn" id="cpReset">Reset to defaults</button>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn" id="csSpawnNow">Spawn one now</button>
+                                        <button class="cs-btn" id="csClear">Clear all</button>
+                                        <button class="cs-btn" id="csReset">Reset to defaults</button>
                                     </div>
-                                    <div class="cp-grid">
-                                        <span>Module</span><span id="cpRunning" class="cp-val">-</span>
-                                        <span>State</span><span id="cpState" class="cp-val">-</span>
-                                        <span>In cloud</span><span id="cpInCloud" class="cp-val">-</span>
-                                        <span>Cloud density</span><span id="cpCloudPct" class="cp-val">-</span>
-                                        <span>Patch density</span><span id="cpDens" class="cp-val">-</span>
-                                        <span>Clouds alive</span><span id="cpActive" class="cp-val">-</span>
-                                        <span>Spawned</span><span id="cpSpawns" class="cp-val">-</span>
-                                        <span>Failed spawns</span><span id="cpFails" class="cp-val">-</span>
-                                        <span>Camera</span><span id="cpCamera" class="cp-val">-</span>
-                                        <span>Ground speed</span><span id="cpSpeed" class="cp-val">-</span>
+                                    <div class="cs-grid">
+                                        <span>Module</span><span id="csRunning" class="cs-val">-</span>
+                                        <span>State</span><span id="csState" class="cs-val">-</span>
+                                        <span>In cloud</span><span id="csInCloud" class="cs-val">-</span>
+                                        <span>Cloud density</span><span id="csCloudPct" class="cs-val">-</span>
+                                        <span>Patch density</span><span id="csDens" class="cs-val">-</span>
+                                        <span>Fade</span><span id="csFade" class="cs-val">-</span>
+                                        <span>Clouds alive</span><span id="csActive" class="cs-val">-</span>
+                                        <span>Spawned</span><span id="csSpawns" class="cs-val">-</span>
+                                        <span>Failed spawns</span><span id="csFails" class="cs-val">-</span>
+                                        <span>Camera</span><span id="csCamera" class="cs-val">-</span>
+                                        <span>Ground speed</span><span id="csSpeed" class="cs-val">-</span>
                                     </div>
-                                    <pre class="cp-log" id="cpLog"></pre>
-                                    <div id="cpSliders"></div>
+                                    <pre class="cs-log" id="csLog"></pre>
+                                    <div id="csSliders"></div>
                                 </div>
                                 </div>
-                                <!-- CloudPass: end -->
+                                <!-- CloudSurf: end -->
 

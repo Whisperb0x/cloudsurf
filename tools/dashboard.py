@@ -1,4 +1,4 @@
-"""Live dashboard for CloudPass: reads the newest logs/live_*.csv that
+"""Live dashboard for CloudSurf: reads the newest logs/live_*.csv that
 tools/live_monitor.py writes and serves a page with the current state and
 small charts of the last few minutes.
 
@@ -71,7 +71,7 @@ def snapshot():
     return {"log": os.path.basename(path), "stale_s": round(age, 1), "last": last, "series": series}
 
 
-PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>CloudPass live</title>
+PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>CloudSurf live</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{--bg:#0f1419;--card:#172029;--fg:#e6edf3;--mut:#8b98a5;--ok:#5fd38d;--bad:#ff7b72;--a:#58a6ff;--b:#f0b35a;--c:#c39bff}
@@ -84,7 +84,7 @@ h1{font-size:18px;margin:0 0 12px} .mut{color:var(--mut)}
 canvas{width:100%;height:120px;background:var(--card);border-radius:10px;display:block;margin-bottom:10px}
 .lab{font-size:12px;color:var(--mut);margin:6px 2px 4px}
 </style></head><body>
-<h1>CloudPass live <span id="log" class="mut"></span></h1>
+<h1>CloudSurf live <span id="log" class="mut"></span></h1>
 <div class="grid" id="cards"></div>
 <div class="lab">FPS (frames per second, last 5 min)</div><canvas id="c_fps"></canvas>
 <div class="lab">Clouds alive <span style="color:var(--b)">&#9632;</span> &nbsp; in cloud <span style="color:var(--c)">&#9632;</span></div><canvas id="c_alive"></canvas>
@@ -146,5 +146,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"CloudPass dashboard on http://localhost:{PORT}", flush=True)
+    print(f"CloudSurf dashboard on http://localhost:{PORT}", flush=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

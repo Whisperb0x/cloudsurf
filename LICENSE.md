@@ -1,6 +1,6 @@
 # License
 
-CloudPass © 2026 whisperb0x and contributors.
+CloudSurf © 2026 whisperb0x and contributors.
 
 This work, including its source code, visual effects, materials, textures and
 documentation, is licensed under the **Creative Commons

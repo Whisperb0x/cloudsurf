@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Version="2" Name="CloudPass" FolderName="Packages" MetadataFolderName="PackagesMetadata">
+<Project Version="2" Name="CloudSurf" FolderName="Packages" MetadataFolderName="PackagesMetadata">
 	<OutputDirectory>.</OutputDirectory>
 	<TemporaryOutputDirectory>_PackageInt</TemporaryOutputDirectory>
 	<Packages>
-		<Package>PackageDefinitions\whisperb0x-cloudpass.xml</Package>
+		<Package>PackageDefinitions\whisperb0x-cloudsurf.xml</Package>
 	</Packages>
 	<PublishingGroups/>
 </Project>

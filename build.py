@@ -1,4 +1,4 @@
-"""CloudPass build script.
+"""CloudSurf build script.
 
 Generates everything the sim project needs that is not hand-written (the WASM
 module, the toolbar panel page and its definition) into msfs-project/, and
@@ -6,10 +6,10 @@ installs the package the sim built into your Community folder.
 
   python build.py              generate module + panel into msfs-project/
   python build.py --install    copy the built package (msfs-project/Packages) to Community
-  python build.py --uninstall  remove CloudPass from Community
+  python build.py --uninstall  remove CloudSurf from Community
 
 Workflow: python tools/make_cloud_vfx.py (only when the effects change),
-python build.py, then in the sim: Dev Mode > open msfs-project/CloudPass.xml >
+python build.py, then in the sim: Dev Mode > open msfs-project/CloudSurf.xml >
 Build All, then python build.py --install and restart the sim.
 
 Needs the MSFS 2024 SDK (WASM toolchain) for the module; set MSFS2024_SDK if it
@@ -28,26 +28,26 @@ SDK = Path(os.environ.get("MSFS2024_SDK", r"C:\MSFS 2024 SDK"))
 LLVM = SDK / "WASM" / "llvm" / "bin"
 SYSROOT = SDK / "WASM" / "wasi-sysroot"
 
-PACKAGE = "whisperb0x-cloudpass"
+PACKAGE = "whisperb0x-cloudsurf"
 PROJECT = HERE / "msfs-project"
 PROJECT_SRC = PROJECT / "PackageSources"
 BUILT_PACKAGE = PROJECT / "Packages" / PACKAGE
-VFX_SRC = PROJECT_SRC / "VisualEffectLibs" / "cloudpass" / "VisualEffectLib"
-# Packages of earlier CloudPass versions that must not run next to this one.
-LEGACY_PACKAGES = ["zz-gfx-cloudpass", "whisperb0x-cloudpassvfx"]
+VFX_SRC = PROJECT_SRC / "VisualEffectLibs" / "cloudsurf" / "VisualEffectLib"
+# Packages of earlier CloudSurf versions that must not run next to this one.
+LEGACY_PACKAGES = ["zz-gfx-cloudpass", "whisperb0x-cloudpassvfx", "whisperb0x-cloudpass"]
 
-PANEL_ID = "PANEL_CLOUDPASS"
-PANEL_URL = "html_ui/InGamePanels/CloudPass/CloudPass.html"
-ICON_URL = "html_ui/icons/toolbar/ICON_TOOLBAR_CLOUDPASS.svg"
+PANEL_ID = "PANEL_CLOUDSURF"
+PANEL_URL = "html_ui/InGamePanels/CloudSurf/CloudSurf.html"
+ICON_URL = "html_ui/icons/toolbar/ICON_TOOLBAR_CLOUDSURF.svg"
 PANEL_XML = f"""<?xml version="1.0" encoding="utf-8"?>
-<SimBase.Document Type="InGamePanels" version="1,0" id="InGamePanel_CloudPass">
-	<Descr>CloudPass toolbar panel</Descr>
-	<InGamePanels.InGamePanelDefinition id="{PANEL_ID}" name="CloudPass" url="{PANEL_URL}" resizeDirections="Both" minWidth="22" minHeight="25" defaultWidth="26" defaultHeight="50" defaultTop="20" defaultRight="2" icon="{ICON_URL}" buttonVisible="True"/>
+<SimBase.Document Type="InGamePanels" version="1,0" id="InGamePanel_CloudSurf">
+	<Descr>CloudSurf toolbar panel</Descr>
+	<InGamePanels.InGamePanelDefinition id="{PANEL_ID}" name="CloudSurf" url="{PANEL_URL}" resizeDirections="Both" minWidth="22" minHeight="25" defaultWidth="26" defaultHeight="50" defaultTop="20" defaultRight="2" icon="{ICON_URL}" buttonVisible="True"/>
 </SimBase.Document>
 """
 EFFECTS_PLACEHOLDER = "/*@EFFECTS@*/[]"
 
-# Effect kinds, as in CloudPass.cpp: 2 = cloud effect (selectable),
+# Effect kinds, as in CloudSurf.cpp: 2 = cloud effect (selectable),
 # 3 = landing light beam (attached to the aircraft, not selectable).
 FX_CLOUD, FX_BEAM = 2, 3
 
@@ -102,7 +102,6 @@ def write_effects_header(effects):
     for i, (label, guid, kind) in enumerate(effects):
         lines.append(f'\t{{ "{guid}", {kind} }},  // {i} {label}')
     lines.append("};")
-    lines.append("const int kDefaultEffect = 0;")
     lines.append(f"const int kSelectableEffects = {sum(1 for e in effects if e[2] != FX_BEAM)};")
     (HERE / "src" / "effects_gen.h").write_text("\n".join(lines) + "\n")
 
@@ -112,7 +111,7 @@ def write_effects_header(effects):
 def compile_wasm(out_wasm):
     if not (LLVM / "clang-cl.exe").exists():
         sys.exit(f"MSFS 2024 SDK WASM toolchain not found in {SDK}; set MSFS2024_SDK")
-    obj = HERE / "out" / "CloudPass.o"
+    obj = HERE / "out" / "CloudSurf.o"
     obj.parent.mkdir(parents=True, exist_ok=True)
     cc = [
         str(LLVM / "clang-cl.exe"), "/c", "/O2", "/std:c++17", "/EHs-c-", "/GS-",
@@ -126,7 +125,7 @@ def compile_wasm(out_wasm):
         "/D_MSFS_WASM=1", "/D__wasi__", "/DNDEBUG",
         f"/I{SYSROOT / 'include'}", f"/I{SYSROOT / 'include' / 'c++' / 'v1'}",
         f"/I{SDK / 'WASM' / 'include'}", f"/I{SDK / 'SimConnect SDK' / 'include'}",
-        f"/Fo{obj}", str(HERE / "src" / "CloudPass.cpp"),
+        f"/Fo{obj}", str(HERE / "src" / "CloudSurf.cpp"),
     ]
     subprocess.run(cc, check=True)
     lib = SYSROOT / "lib" / "wasm32-wasi"
@@ -150,13 +149,12 @@ def compile_wasm(out_wasm):
 
 def panel_html(effects):
     html = read_raw(HERE / "panel" / "standalone.html")
-    js = read_raw(HERE / "panel" / "cloudpass.js")
+    js = read_raw(HERE / "panel" / "cloudsurf.js")
     js = js.replace(EFFECTS_PLACEHOLDER, json.dumps([label for label, _, kind in effects if kind != FX_BEAM]))
-    js = js.replace("/*@DEFAULT_EFFECT@*/0", "0")
     for marker, text in (("/*@STANDALONE_CSS@*/", read_raw(HERE / "panel" / "standalone.css")),
-                         ("/*@CLOUDPASS_CSS@*/", read_raw(HERE / "panel" / "cloudpass.css")),
-                         ("<!--@CLOUDPASS_SECTION@-->", read_raw(HERE / "panel" / "section.html")),
-                         ("/*@CLOUDPASS_JS@*/", js)):
+                         ("/*@CLOUDSURF_CSS@*/", read_raw(HERE / "panel" / "cloudsurf.css")),
+                         ("<!--@CLOUDSURF_SECTION@-->", read_raw(HERE / "panel" / "section.html")),
+                         ("/*@CLOUDSURF_JS@*/", js)):
         if html.count(marker) != 1:
             sys.exit(f"{marker} missing in panel/standalone.html")
         html = html.replace(marker, text)
@@ -169,17 +167,17 @@ def generate():
     effects = own_effects()
     write_effects_header(effects)
     (PROJECT_SRC / "Modules").mkdir(parents=True, exist_ok=True)
-    compile_wasm(PROJECT_SRC / "Modules" / "CloudPass.wasm")
-    panel_dir = PROJECT_SRC / "html_ui" / "InGamePanels" / "CloudPass"
+    compile_wasm(PROJECT_SRC / "Modules" / "CloudSurf.wasm")
+    panel_dir = PROJECT_SRC / "html_ui" / "InGamePanels" / "CloudSurf"
     panel_dir.mkdir(parents=True, exist_ok=True)
-    write_raw(panel_dir / "CloudPass.html", panel_html(effects))
+    write_raw(panel_dir / "CloudSurf.html", panel_html(effects))
     icon_dir = PROJECT_SRC / "html_ui" / "icons" / "toolbar"
     icon_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(HERE / "panel" / "ICON_TOOLBAR_CLOUDPASS.svg", icon_dir / "ICON_TOOLBAR_CLOUDPASS.svg")
+    shutil.copy2(HERE / "panel" / "ICON_TOOLBAR_CLOUDSURF.svg", icon_dir / "ICON_TOOLBAR_CLOUDSURF.svg")
     (PROJECT_SRC / "InGamePanels").mkdir(parents=True, exist_ok=True)
-    write_raw(PROJECT_SRC / "InGamePanels" / "InGamePanel_CloudPass.xml", PANEL_XML)
+    write_raw(PROJECT_SRC / "InGamePanels" / "InGamePanel_CloudSurf.xml", PANEL_XML)
     print(f"Generated module and panel in {PROJECT_SRC} ({len(effects)} effects)")
-    print(f"Next: in the sim, Dev Mode > open {PROJECT / 'CloudPass.xml'} > Build All, "
+    print(f"Next: in the sim, Dev Mode > open {PROJECT / 'CloudSurf.xml'} > Build All, "
           f"then python build.py --install")
 
 

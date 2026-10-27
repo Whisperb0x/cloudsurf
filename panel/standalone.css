@@ -1,6 +1,6 @@
-/* Look of the CloudPass toolbar panel: the ctrl-* base classes the panel
+/* Look of the CloudSurf toolbar panel: the ctrl-* base classes the panel
    section (section.html) uses. */
-.cp-scroll {
+.cs-scroll {
 	padding: 12px 16px;
 	overflow-y: auto;
 	height: 100%;
