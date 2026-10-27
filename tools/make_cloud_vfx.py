@@ -9,7 +9,12 @@ no rise, drift with the wind, and graph parameters CloudSurf sets per spawn:
 
   CloudDensity  0..1  thin = light and see-through, dense = opaque and darker
   CloudSize     scale on the particle size (per cloud variation)
-  CloudShade    0..1 multiplies the colour: darker at dusk and night
+  CloudTone     brightness of the cloud (sun elevation, depth in the deck,
+                density, brightness slider), set by CloudSurf
+  CloudLit      1 = lit by the sim's sun like smoke, 0 = unlit: the colour is
+                CloudTone alone (as emissive), so it does not catch sunlight
+  CloudVis      m: particles fade in from this distance to half of it, as if
+                out of the fog, so you do not see the clouds lined up far ahead
   CloudAlpha    0..1 multiplies the opacity: fainter at night
   CloudFade     0..1 multiplies opacity and glow: all clouds fade out together
                 when CloudSurf is switched off
@@ -50,6 +55,8 @@ START_RATE, START_TIME = 25.0, 0.4
 GROW_START = 0.7
 FADE_OUT = 0.4                         # share of the lifetime used to fade out
 GLOW_GAIN = 6.0                        # emissive per unit of light strength
+UNLIT_GAIN = 2.0                       # emissive per unit of CloudTone when unlit
+NEAR_FADE = (6.0, 20.0)                # m: particles closer than 6 m are gone, full from 26 m
 # Light falloff 1 / (1 + (d/near)^2), reaching zero at `reach` (metres).
 LANDING_NEAR, LANDING_REACH = 250.0, 600.0
 LANDING_CONE = 12.0                    # degrees, half angle where the landing light ends
@@ -81,16 +88,17 @@ BEAM_SIZE = (3.0, 40.0)   # m at the nose / at the end
 BEAM_ALPHA = 0.55         # start opacity at full Beam
 BEAM_GLOW = 3.0           # emissive at the nose at full Beam
 
-# Wing fade: attached to the aircraft some way ahead of the wings (CloudSurf
-# sets the offset), it lays small cloud flakes into the world across the
-# wingspan. The aircraft flies through them, so they stream over the wings.
-# CloudSurf drives how many (WingRate, per second, from the speed so it is the
-# same per metre flown) and how dense (WingAlpha) from the live cloud density.
-WING_LIFETIME = 1.6       # s: flakes are passed well before they go
-WING_CAPACITY = 240.0
-WING_SIZE = (4.0, 11.0)   # m, random per flake
+# Wing fade: a stream that flies along. Attached to the aircraft some way
+# ahead of the wings (CloudSurf sets the offset) in local space, it sends small
+# cloud flakes backwards at WING_SPEED across the wingspan, at random in a tube
+# of WING_TUBE radius, so they keep streaming over the wings. CloudSurf drives
+# how many (WingRate) and how dense (WingAlpha, gusty) from the live density.
+WING_SPEED = 40.0         # m/s backwards, relative to the aircraft (+-20% per flake)
+WING_TRAVEL = 60.0        # m: from the emitter to well behind the wings
+WING_CAPACITY = 160.0
+WING_SIZE = (3.0, 8.0)    # m, random per flake
 WING_TUBE = 3.0           # m radius of the tube along the span, through the aircraft's middle
-WING_FADE_IN = 0.08       # share of the lifetime
+WING_FADE_IN, WING_FADE_OUT = 0.15, 0.3   # share of the lifetime
 
 Z = "{00000000-0000-0000-0000-000000000000}"
 # Fixed ids so rebuilding keeps the effect GUID (CloudSurf looks it up).
@@ -201,7 +209,9 @@ def build(name, atlas):
     # graph parameters from CloudSurf
     density = param("CloudDensity", 0.6, (-700, 100))
     csize = param("CloudSize", 1.0, (-700, 250))
-    shade = param("CloudShade", 1.0, (-700, 400))
+    tone = param("CloudTone", 1.0, (-700, 400))
+    lit = param("CloudLit", 1.0, (-700, 470))
+    vis = param("CloudVis", 3000.0, (-1100, 1300))
     calpha = param("CloudAlpha", 1.0, (-700, 550))
     cfade = param("CloudFade", 1.0, (-700, 625))
     light = vector3("light", [(param(n, 0.0, (-1100, 700 + 80 * i)), 0)
@@ -258,8 +268,13 @@ def build(name, atlas):
     fade = math_node("MultiplyOperation", "fade", fade_p, cfade, (-200, 240))
     alpha = math_node("MultiplyOperation", "alphafade", alpha0, fade, (-150, 180))
     grey_d = lerp("grey", None, None, dens1, (-450, -20), xv=GREY_THIN, yv=GREY_DENSE)
-    grey = math_node("MultiplyOperation", "greyshade", grey_d, shade, (-350, -20))
-    colour = vector4("colour", [(grey, 0), (grey, 0), (grey, 0), (alpha, 0)], (-50, 60))
+    grey = math_node("MultiplyOperation", "greyshade", grey_d, tone, (-350, -20))
+    diffuse = math_node("MultiplyOperation", "diffuse", grey, lit, (-250, -20))
+    unlit = math_node("MultiplyOperation", "unlit",
+                      math_node("MultiplyOperation", "unlit0", grey,
+                                math_node("SubtractOperation", "notlit", None, lit, (-350, 40), xv=1.0),
+                                (-250, 40)),
+                      None, (-150, 40), yv=UNLIT_GAIN)
 
     # Where this particle is (start position plus wind drift so far), and
     # where it lies from the aircraft. The particle's own randoms are seeded
@@ -270,6 +285,19 @@ def build(name, atlas):
     rel = math_node("SubtractOperation", "rel", ppos, light, (-150, 1100))
     dd = math_node("Dot", "dd", rel, rel, (-50, 1100))
     dist = math_node("PowOperation", "dist", dd, None, (50, 1100), yv=0.5)
+    # out of the fog: full from CloudVis/2, gone beyond CloudVis; and gone very
+    # close to the aircraft (no hard edges on the windscreen)
+    vis_t = math_node("DivideOperation", "vist",
+                      math_node("SubtractOperation", "visleft", vis, dist, (150, 1000)),
+                      math_node("MultiplyOperation", "vishalf", vis, None, (150, 960), yv=0.5), (250, 1000))
+    vis_k = clamp("visk", vis_t, 0.0, 1.0, (350, 1000))
+    near_k = clamp("camk", math_node("MultiplyOperation", "camt",
+                                       math_node("SubtractOperation", "camleft", dist, None, (150, 900),
+                                                 yv=NEAR_FADE[0]),
+                                       None, (250, 900), yv=1.0 / NEAR_FADE[1]), 0.0, 1.0, (350, 900))
+    alpha_v = math_node("MultiplyOperation", "alphavis",
+                        math_node("MultiplyOperation", "alphavis0", alpha, vis_k, (450, 1000)), near_k, (550, 950))
+    colour = vector4("colour", [(diffuse, 0), (diffuse, 0), (diffuse, 0), (alpha_v, 0)], (650, 950))
     # flatter glow near the aircraft: vertical distance counts GLOW_FLATTEN times
     up = vector3("up", [(None, 0), (None, 1.0), (None, 0)], (-150, 1200))
     rel_up = math_node("Dot", "relup", rel, up, (-50, 1200))
@@ -310,9 +338,12 @@ def build(name, atlas):
 
     # emissive: white plus red (beacon, left nav) and green (right nav)
     gain = math_node("MultiplyOperation", "gain", cfade, None, (850, 1700), yv=GLOW_GAIN)
-    red_e = math_node("MultiplyOperation", "rede", red, gain, (950, 1800))
-    green_e = math_node("MultiplyOperation", "greene", green, gain, (950, 1900))
-    white_e = math_node("MultiplyOperation", "whitee", white, gain, (950, 1600))
+    red_e = math_node("AddOperation", "redu", math_node("MultiplyOperation", "rede", red, gain, (950, 1800)),
+                      unlit, (1000, 1800))
+    green_e = math_node("AddOperation", "greenu", math_node("MultiplyOperation", "greene", green, gain, (950, 1900)),
+                        unlit, (1000, 1900))
+    white_e = math_node("AddOperation", "whiteu", math_node("MultiplyOperation", "whitee", white, gain, (950, 1600)),
+                        unlit, (1000, 1600))
     emissive = vector4("emissive", [(red_e, 0), (green_e, 0), (white_e, 0), (None, 1.0)], (1050, 1700))
 
     tex = ""
@@ -439,15 +470,16 @@ def build_wing(name):
     rate = param("WingRate", 0.0, (-700, -300))      # flakes per second
     walpha = param("WingAlpha", 0.0, (-700, 100))    # 0..1 opacity
     half = param("WingHalfSpan", 15.0, (-700, -150))  # m
-    shade = param("CloudShade", 1.0, (-700, 250))
+    tone = param("CloudTone", 1.0, (-700, 250))
     calpha = param("CloudAlpha", 1.0, (-700, 400))
+    lit = param("CloudLit", 1.0, (-700, 470))
 
     age = attribute("age", "AgeOverLifetime", False, (-450, 400))
     src_size = attribute("srcsize", "Size", True, (-450, 520))
     pid = attribute("pid", "id", False, (-950, 300))
 
     # anywhere across the wingspan, at random in a tube of WING_TUBE radius
-    # around it (uniform over the tube's cross-section: radius sqrt(random))
+    # around it (uniform over its cross-section: radius sqrt(random))
     rx = random("rx", -1.0, 1.0, pid, 1, (-800, -300))
     x = math_node("MultiplyOperation", "x", rx, half, (-650, -300))
     ang = random("ang", 0.0, 6.283, pid, 2, (-900, -220))
@@ -464,22 +496,28 @@ def build_wing(name):
     rrot = random("rrot", 0.0, 6.283, pid, 4, (-800, -60))
     rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
     rsize = random("rsize", WING_SIZE[0], WING_SIZE[1], pid, 5, (-800, 20))
+    speed = random("rspeed", -WING_SPEED * 1.2, -WING_SPEED * 0.8, pid, 6, (-800, 520))
+    velocity = vector3("velocity", [(None, 0), (None, 0), (speed, 0)], (-600, 520))
     grow = lerp("growf", None, None, age, (-150, 400), xv=0.8, yv=1.0)
     upd_size = math_node("MultiplyOperation", "updsize", grow, src_size, (-50, 450))
 
-    wind = out("wind")
-    node("WindDirection", "wind", f"            <OutputValue>{wind}</OutputValue>\n", (-450, 640))
-
-    # opacity: WingAlpha at night less, quick fade in, out over the second half
+    # opacity: WingAlpha, less at night, fading in and out over the way back
     a0 = math_node("MultiplyOperation", "alphanight", walpha, calpha, (-350, 130))
     fin = clamp("fadein", math_node("MultiplyOperation", "fadeint", age, None, (-450, 180), yv=1.0 / WING_FADE_IN),
                 0.0, 1.0, (-350, 200))
-    fout = clamp("fadeout", lerp("fadeoutt", None, None, age, (-450, 260), xv=2.0, yv=0.0), 0.0, 1.0, (-350, 260))
+    fout = clamp("fadeout", lerp("fadeoutt", None, None, age, (-450, 260), xv=1.0 / WING_FADE_OUT, yv=0.0),
+                 0.0, 1.0, (-350, 260))
     alpha = math_node("MultiplyOperation", "alpha",
                       math_node("MultiplyOperation", "fade", fin, fout, (-250, 220)), a0, (-150, 180))
     grey_d = lerp("grey", None, None, walpha, (-450, -20), xv=0.8, yv=0.45)
-    grey = math_node("MultiplyOperation", "greyshade", grey_d, shade, (-350, -20))
-    colour = vector4("colour", [(grey, 0), (grey, 0), (grey, 0), (alpha, 0)], (-50, 60))
+    grey = math_node("MultiplyOperation", "greyshade", grey_d, tone, (-350, -20))
+    diffuse = math_node("MultiplyOperation", "diffuse", grey, lit, (-250, -20))
+    unlit = math_node("MultiplyOperation", "unlit",
+                      math_node("MultiplyOperation", "unlit0", grey,
+                                math_node("SubtractOperation", "notlit", None, lit, (-350, 40), xv=1.0), (-250, 40)),
+                      None, (-150, 40), yv=UNLIT_GAIN)
+    colour = vector4("colour", [(diffuse, 0), (diffuse, 0), (diffuse, 0), (alpha, 0)], (-50, 60))
+    emissive = vector4("emissive", [(unlit, 0), (unlit, 0), (unlit, 0), (None, 1.0)], (-50, 160))
 
     node("VisualEffect", "effect",
          f"            <Name>{name}</Name>\n"
@@ -490,6 +528,7 @@ def build_wing(name):
          pin("ParticleRate", rate, 0.0)
          + f"            <Capacity>{f(WING_CAPACITY)}</Capacity>\n"
          + f"            <MaxDistanceEmission>{f(MAX_DISTANCE)}</MaxDistanceEmission>\n"
+         "            <EmitInLocalSpace>True</EmitInLocalSpace>\n"
          "            <ParticleInit>\n"
          f'                <ObjectReference InstanceId="{init}" id="BlockParticleInit"/>\n'
          "            </ParticleInit>\n", (300, 0))
@@ -497,20 +536,21 @@ def build_wing(name):
          "            <ParticleUpdate>\n"
          f'                <ObjectReference InstanceId="{update}" id="BlockParticleUpdate"/>\n'
          "            </ParticleUpdate>\n"
-         f"            <ParticleLifetime>\n    {pin('FloatIn', None, WING_LIFETIME)}            </ParticleLifetime>\n"
+         f"            <ParticleLifetime>\n    {pin('FloatIn', None, WING_TRAVEL / WING_SPEED)}            </ParticleLifetime>\n"
          f"            <ParticleSize>\n    {pin('FloatIn', rsize, 0)}            </ParticleSize>\n"
          f"            <ParticlePosition>\n                {float3(start)}\n            </ParticlePosition>\n"
          f"            <ParticleRotation>\n                {float3(rot)}\n            </ParticleRotation>\n"
-         f"            <ParticleVelocity>\n                {float3(None)}\n            </ParticleVelocity>\n", (300, 200))
+         f"            <ParticleVelocity>\n                {float3(velocity)}\n            </ParticleVelocity>\n", (300, 200))
     node("BlockParticleUpdate", "update",
          "            <ParticleOutput>\n"
          f'                <ObjectReference InstanceId="{output}" id="Output"/>\n'
          "            </ParticleOutput>\n"
-         f"            <ParticleVelocity>\n                {float3(wind)}\n            </ParticleVelocity>\n"
          f"            <ParticleSize>\n    {pin('FloatIn', upd_size, 0)}            </ParticleSize>\n", (300, 420))
     node("Output", "output",
          f"            <ParticleColor>\n                <ColorIn>{colour}, 0, 0, 0, 0</ColorIn>\n"
-         "            </ParticleColor>\n", (300, 620))
+         "            </ParticleColor>\n"
+         f"            <MaterialEmissiveColor>\n                <ColorIn>{emissive}, 0, 0, 0, 0</ColorIn>\n"
+         "            </MaterialEmissiveColor>\n", (300, 620))
     return effect
 
 

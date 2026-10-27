@@ -40,15 +40,19 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Clouds around you | 41 | how many clouds exist at once; moving it makes the preset "custom" |
 | Thickness | 1.5x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
+| Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow (0 = off) |
 | Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
-Clouds come in random sizes and orientations. For the wing fade, small cloud
-flakes are laid out just ahead of the wings across the span and stay where
-they are, so you fly through them and they stream over the wings, as many
-and as dense as the cloud you are in (unlike a cloud attached to the aircraft,
-which stands still around it).
+Clouds come in random sizes and orientations and come out of the fog: they
+fade in within the visibility of the cloud you are in instead of being seen
+lined up far ahead. They are not lit by the sun like smoke: CloudSurf sets
+their brightness from the sun's elevation, how deep you are below the top of
+the deck and the density (Advanced has the old lit look as an option). The
+wing fade is a stream of small cloud flakes flying along with the aircraft,
+sent backwards over the wings in a 3 m tube, as many and as dense as the
+cloud you are in, with a slow gusty swing.
 
 Most of CloudSurf follows the sim on its own: when clouds start and stop,
 how thick, dark and many they are (the sim's cloud density), how close new

@@ -49,10 +49,8 @@ const char* kBeaconRpn =
 	"(A:LIGHT BEACON, bool) (E:ABSOLUTE TIME, seconds) 1.2 % 0.15 < and 2.5 *";
 const char* kLandingRpn = "(A:LIGHT LANDING, bool) 1.6 * (L:CLOUDSURF_GLOW, number) *";
 
-// Shade and opacity by time of day (E:TIME OF DAY: 0 dawn, 1 day, 2 dusk, 3 night).
-const char* kShadeRpn =
-	"1 (E:TIME OF DAY, enum) 0 == 0.25 * (E:TIME OF DAY, enum) 2 == 0.25 * + "
-	"(E:TIME OF DAY, enum) 3 == 0.7 * + -";
+// Opacity by time of day (E:TIME OF DAY: 0 dawn, 1 day, 2 dusk, 3 night); the
+// brightness is L:CLOUDSURF_TONE, see CloudTone.
 const char* kNightAlphaRpn =
 	"1 (E:TIME OF DAY, enum) 0 == 0.2 * (E:TIME OF DAY, enum) 2 == 0.2 * + "
 	"(E:TIME OF DAY, enum) 3 == 0.5 * + -";
@@ -101,7 +99,7 @@ enum { EVT_FRAME = 1, EVT_SIMSTOP = 2 };
 // the sim on its own; the fixed values for that are the constants below.
 struct Config {
 	double enable, lead_max, lateral, vertical, full_pct, max_alive, mult, cluster,
-	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing;
+	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit;
 };
 
 struct ConfigVar { const char* name; double def; double Config::* field; };
@@ -119,6 +117,8 @@ const ConfigVar kConfigVars[] = {
 	{ "CLUSTER",    8.0,   &Config::cluster },    // clouds per spawn step
 	{ "SIZE",       1.65,  &Config::size },       // cloud size
 	{ "GLOW",       0.85,  &Config::glow },       // glow from aircraft lights (read by the effect's RPN)
+	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, to match the sim's fog
+	{ "LIT",        0.0,   &Config::lit },        // 1 = lit by the sun like smoke, 0 = unlit, colour from CloudTone
 	{ "TEST",       0.0,   &Config::test },       // 1 = test clouds in clear sky
 	{ "TEST_DENS",  1.0,   &Config::test_dens },  // their density 0..1
 	{ "EFFECT",     0.0,   &Config::effect },     // index into kEffects, -1 = Classic + wisps
@@ -442,17 +442,21 @@ void UpdateBeam() {
 	if (g_beam_id == (FsVfxId)FSVFXID_NULL) ++g_fails;
 }
 
-// Wing fade (CloudSurfWing): attached kWingAhead in front of the aircraft,
-// it lays small cloud flakes into the world across the wingspan; flying
-// through them, they stream over the wings. How many per metre flown and how
-// dense follow the live cloud density (L:CLOUDSURF_DENS_LIVE) and the Wing
-// fade slider (L:CLOUDSURF_WING); outside cloud there are none.
+// Wing fade (CloudSurfWing): attached kWingAhead in front of the aircraft, a
+// stream that flies along and sends small cloud flakes backwards over the
+// wings (see tools/make_cloud_vfx.py). How many and how dense follow the live
+// cloud density (L:CLOUDSURF_DENS_LIVE) and the Wing fade slider
+// (L:CLOUDSURF_WING), the density with a slow gusty swing so the wing fades in
+// and out; outside cloud there are none.
 const double kWingAhead = 35.0;     // m in front of the aircraft origin
-const double kWingPerMetre = 0.35;  // flakes per metre flown at full density
 FsVfxId g_wing_id = (FsVfxId)FSVFXID_NULL;
-char g_wing_rate[200], g_wing_half[24];
+char g_wing_half[24];
+const char* kWingRateRpn =
+	"(L:CLOUDSURF_WING, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * 70 *";
 const char* kWingAlphaRpn =
-	"(L:CLOUDSURF_DENS_LIVE, number) 0.7 * (L:CLOUDSURF_WING, number) * 0.95 min";
+	"(L:CLOUDSURF_DENS_LIVE, number) 0.7 * "
+	"(E:SIMULATION TIME, seconds) 0.9 * sin (E:SIMULATION TIME, seconds) 2.3 * sin + 0.15 * 0.8 + * "
+	"(L:CLOUDSURF_WING, number) * 0 max 0.95 min";
 
 int WingEffect() {
 	for (int i = 0; i < kEffectCount; ++i)
@@ -472,20 +476,18 @@ void UpdateWing(const Aircraft& a) {
 		return;
 	}
 	if (g_wing_id != (FsVfxId)FSVFXID_NULL && fsVfxIsValid(g_wing_id)) return;
-	snprintf(g_wing_rate, sizeof(g_wing_rate),
-	         "(L:CLOUDSURF_WING, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * "
-	         "(A:AIRSPEED TRUE, meters per second) * %.3f *", kWingPerMetre);
 	snprintf(g_wing_half, sizeof(g_wing_half), "%.1f", fmax(10.0, a.wingspan_m * 0.6));
-	FsVfxGraphParam params[5] = {
-		{ "WingRate", g_wing_rate },
+	FsVfxGraphParam params[6] = {
+		{ "WingRate", kWingRateRpn },
 		{ "WingAlpha", kWingAlphaRpn },
 		{ "WingHalfSpan", g_wing_half },
-		{ "CloudShade", kShadeRpn },
+		{ "CloudTone", "(L:CLOUDSURF_TONE, number)" },
 		{ "CloudAlpha", kNightAlphaRpn },
+		{ "CloudLit", "(L:CLOUDSURF_LIT, number)" },
 	};
 	FsVec3d offset = { 0.0, 0.0, kWingAhead };
 	FsVec3d pbh = { 0.0, 0.0, 0.0 };
-	g_wing_id = fsVfxSpawnOnSimObject(kEffects[fx].guid, 0, nullptr, offset, pbh, -1.f, params, 5);
+	g_wing_id = fsVfxSpawnOnSimObject(kEffects[fx].guid, 0, nullptr, offset, pbh, -1.f, params, 6);
 	if (g_wing_id == (FsVfxId)FSVFXID_NULL) ++g_fails;
 }
 
@@ -554,8 +556,11 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 		side = (Rand01() * 2.0 - 1.0) * half_width;
 		up = (Rand01() * 2.0 - 1.0) * kNearVertical;
 	} else {
-		side = (Rand01() * 2.0 - 1.0) * g_cfg.lateral;
-		up = (Rand01() * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
+		// a cone: closer clouds nearer the path, far ones spread wider, so they
+		// fill the view instead of lining up along the path
+		double cone = 0.35 + 0.65 * fmin(1.0, lead / fmax(1.0, g_cfg.lead_max));
+		side = (Rand01() * 2.0 - 1.0) * g_cfg.lateral * cone;
+		up = (Rand01() * 2.0 - 1.0) * g_cfg.vertical * cone * (1.0 - steep);
 	}
 
 	// Small to big with most of them medium-small: 0.35..2.4 (over the wings
@@ -589,7 +594,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	// the ones over the wings a bit denser.
 	double factor = near ? 1.3 : 1.0 - kDensVar * Rand01();
 	const Effect& fx = kEffects[PickEffect(g_mix)];
-	FsVfxGraphParam params[16];
+	FsVfxGraphParam params[20];
 	int nparams = 0;
 	if (fx.kind == FX_CLOUDSURF) {
 		// Above 1 the effect only gets more opaque (MULT above 1x).
@@ -620,7 +625,9 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 		         "(A:LIGHT NAV, bool) 1.2 * %s 0 > * (L:CLOUDSURF_GLOW, number) *", side_rpn);
 		params[nparams++] = { "CloudDensity", slot->dens };
 		params[nparams++] = { "CloudSize", slot->size };
-		params[nparams++] = { "CloudShade", kShadeRpn };
+		params[nparams++] = { "CloudTone", "(L:CLOUDSURF_TONE, number)" };
+		params[nparams++] = { "CloudLit", "(L:CLOUDSURF_LIT, number)" };
+		params[nparams++] = { "CloudVis", "(L:CLOUDSURF_VIS, number)" };
 		params[nparams++] = { "CloudAlpha", kNightAlphaRpn };
 		params[nparams++] = { "CloudFade", slot->fade };
 		params[nparams++] = { "LandingGlow", kLandingRpn };
@@ -690,6 +697,44 @@ double DensityChange(const Aircraft& a, double dt, bool* rising) {
 	g_change = fmax(now, g_change - dt * kChangeHold);
 	*rising = g_rising;
 	return g_change;
+}
+
+// Sun elevation in degrees at the aircraft, from the date and UTC time.
+double SunElevation(const Aircraft& a) {
+	double doy = Calc("(E:ZULU DAY OF YEAR, number)");
+	double utc_h = Calc("(E:ZULU TIME, seconds)") / 3600.0;
+	double decl = 23.44 * sin((284.0 + doy) / 365.0 * 2.0 * 3.14159265);
+	double hour_angle = 15.0 * (utc_h + a.lon / 15.0 - 12.0);
+	double s = sin(a.lat / kDeg) * sin(decl / kDeg) + cos(a.lat / kDeg) * cos(decl / kDeg) * cos(hour_angle / kDeg);
+	return asin(fmin(1.0, fmax(-1.0, s))) * kDeg;
+}
+
+// L:CLOUDSURF_TONE, the brightness of the clouds: the sim gives no light value
+// inside a cloud, so it is made from the sun's elevation (smoothly from night
+// to day, not in steps), how deep we are below the top of the deck (darker
+// further down), the density around us (darker when thicker) and the
+// Brightness slider. L:CLOUDSURF_VIS is how far the clouds can be seen in this
+// cloud (they fade in from there), from the live density; it is kept after
+// leaving a cloud.
+double g_vis = 400.0;
+const double kVisThin = 600.0, kVisThick = 180.0;  // m
+
+void UpdateTone(const Aircraft& a, bool test, bool active) {
+	double elev = SunElevation(a);
+	double day = fmin(1.0, fmax(0.0, (elev + 6.0) / 18.0));  // 0 at -6 deg, 1 at +12 deg
+	day = day * day * (3.0 - 2.0 * day);
+	double depth_k = 1.0;
+	if (g_layer_now >= 0 && LayerTop(g_layer_now) < 5e4) {
+		double depth = fmax(0.0, LayerTop(g_layer_now) - a.alt_m);
+		depth_k = 0.45 + 0.55 * exp(-depth / 1200.0);
+	}
+	double dens_k = 1.0 - 0.3 * fmin(1.0, g_dens_live);
+	double tone = g_cfg.bright * (0.04 + 0.96 * day) * depth_k * dens_k;
+	SetL("TONE", fmin(3.0, fmax(0.0, tone)));
+	SetL("SUN", elev);
+	if (test) g_vis = 3000.0;
+	else if (active) g_vis = kVisThin + (kVisThick - kVisThin) * fmin(1.0, g_dens_live);
+	SetL("VIS", g_vis);
 }
 
 // Distance flown per spawn step. The MAX_ALIVE budget is spread evenly over
@@ -850,6 +895,7 @@ void Update() {
 	else if (active) g_dens_live = dens;
 	else if (a.time - g_last_active > kDensHold) g_dens_live = fmax(0.0, g_dens_live - dt * g_dens_live / kDensRelease - dt * 0.05);
 	SetL("DENS_LIVE", g_dens_live);
+	UpdateTone(a, test, active);
 
 	// L:CLOUDSURF_FADE: being in cloud, smoothed; the landing light beam
 	// follows it.
