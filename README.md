@@ -21,7 +21,8 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
    Community folder.
 2. Start the sim and open **CloudSurf** from the toolbar. If the button does not
    show, enable it in the toolbar settings.
-3. If you use GFX, switch its *Wing Fade* off; otherwise you get both effects.
+3. If another add-on also adds a wing fade or in-cloud effect, switch that off;
+   otherwise you get both effects.
 
 ## Settings
 

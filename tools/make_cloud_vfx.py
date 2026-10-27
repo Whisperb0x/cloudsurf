@@ -3,10 +3,9 @@ msfs-project, then build it in the sim (Project Editor: Build All).
 
   python tools/make_cloud_vfx.py [PROJECT_EFFECT_DIR]
 
-Modelled on the MK Studios BIKF steam (decoded with tools/spb_dump.py and the
-sim's Propdefs): default smoke material, few large soft particles whose size
-grows with sqrt(age) and whose alpha fades out. Changes: no rise, drift with
-the wind, and graph parameters CloudSurf sets per spawn:
+Built like a steam or smoke effect: default smoke material, few large soft
+particles whose size grows with sqrt(age) and whose alpha fades out. Changes:
+no rise, drift with the wind, and graph parameters CloudSurf sets per spawn:
 
   CloudDensity  0..1  thin = light and see-through, dense = opaque and darker
   CloudSize     scale on the particle size (per cloud variation)

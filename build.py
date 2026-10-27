@@ -35,7 +35,7 @@ PROJECT_SRC = PROJECT / "PackageSources"
 BUILT_PACKAGE = PROJECT / "Packages" / PACKAGE
 VFX_SRC = PROJECT_SRC / "VisualEffectLibs" / "cloudsurf" / "VisualEffectLib"
 # Packages of earlier CloudSurf versions that must not run next to this one.
-LEGACY_PACKAGES = ["zz-gfx-cloudpass", "whisperb0x-cloudpassvfx", "whisperb0x-cloudpass"]
+LEGACY_PACKAGES = ["whisperb0x-cloudpassvfx", "whisperb0x-cloudpass"]
 
 PANEL_ID = "PANEL_CLOUDSURF"
 PANEL_URL = "html_ui/InGamePanels/CloudSurf/CloudSurf.html"
