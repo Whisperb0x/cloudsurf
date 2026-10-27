@@ -153,7 +153,7 @@ struct Puff {
 	double lat, lon, alt_m;
 	double half;      // half its height, m
 	double stop_time;
-	char dens[24];  // graph parameter values must outlive the spawn call
+	char dens[96];  // graph parameter values must outlive the spawn call
 	char size[24];
 	char fade[260];
 	char light[3][200];
@@ -184,7 +184,9 @@ int g_layer_now = -1;              // layer the aircraft is in or about to enter
 double g_deck_top[kMaxLayers], g_deck_bot[kMaxLayers];
 double g_layer_sig = 0.0;          // layers changed: forget what was learned
 const double kLayerMargin = 30.0;  // m the flight path may be outside its layer and still get clouds
-const double kDeckSlack = 20.0;    // m a learned top/base is widened by
+// Clouds are placed with their centre from kDeckInBase above the base to
+// kDeckInTop below the top, so you fly right into them at the edge.
+const double kDeckInBase = 40.0, kDeckInTop = 50.0;
 const double kVerticalExit = 1.5;  // m/s vertical speed that counts as leaving through top/base
 // Half the height of a cloud per unit of CloudSize: vertical particle spread
 // (5 m) plus the radius of the biggest particles (35 m x 1.4 / 2), see
@@ -192,6 +194,10 @@ const double kVerticalExit = 1.5;  // m/s vertical speed that counts as leaving 
 const double kCloudHalfHeight = 30.0;
 const double kPreCoverage = 0.6;   // start early only into layers at least this covered
 double g_last_mix = 0.6;           // density curve value of the last cloud, for early starts
+// Density all clouds follow (L:CLOUDSURF_DENS_LIVE): the current one in cloud;
+// after leaving, the last one is held for the clouds that stay, then let go.
+double g_dens_live = 0.0;
+const double kDensHold = 3.0, kDensRelease = 2.0;  // s
 
 Config g_cfg;
 Puff g_puffs[kMaxPuffs];
@@ -291,10 +297,10 @@ void ReadLayers(const Aircraft& a) {
 
 // Top and base of a layer: what was seen of the real deck where known.
 double LayerTop(int i) {
-	return g_deck_top[i] > 0.0 ? fmin(g_layers[i].top_m, g_deck_top[i] + kDeckSlack) : g_layers[i].top_m;
+	return g_deck_top[i] > 0.0 ? fmin(g_layers[i].top_m, g_deck_top[i]) : g_layers[i].top_m;
 }
 double LayerBot(int i) {
-	return g_deck_bot[i] > 0.0 ? fmax(g_layers[i].bot_m, g_deck_bot[i] - kDeckSlack) : g_layers[i].bot_m;
+	return g_deck_bot[i] > 0.0 ? fmax(g_layers[i].bot_m, g_deck_bot[i]) : g_layers[i].bot_m;
 }
 
 // Forget the learned deck when the weather's layers change.
@@ -486,12 +492,13 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	OffsetToWorld(a, e, n, u, slot->lat, slot->lon, slot->alt_m);
 	// In a known layer: only where we are still in the layer when we get there
 	// (no clouds appearing below or above us after climbing or descending out
-	// of it), and the whole cloud within the layer, its height included.
+	// of it), with the cloud's centre from kDeckInBase above the base to
+	// kDeckInTop below the top.
 	if (g_layer_now >= 0) {
 		double top = LayerTop(g_layer_now), bot = LayerBot(g_layer_now);
 		double path_alt = a.alt_m + fu * lead;
 		if (path_alt > top + kLayerMargin || path_alt < bot - kLayerMargin) return false;
-		double lo = bot + slot->half, hi = top - slot->half;
+		double lo = bot + kDeckInBase, hi = top - kDeckInTop;
 		slot->alt_m = lo > hi ? 0.5 * (bot + top) : fmin(hi, fmax(lo, slot->alt_m));
 	}
 
@@ -499,16 +506,16 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	// varies the shapes that pass).
 	double heading = Rand01() * 360.0;
 
-	// Each cloud gets its own density, following the sim's: thin ones mixed
-	// with thicker ones, and the ones over the wings a bit denser.
-	if (near) dens = fmin(2.0, dens * 1.3);
-	else dens *= 1.0 - kDensVar * Rand01();
+	// Each cloud follows the density around us all its life (L:CLOUDSURF_DENS_LIVE,
+	// see Update), times its own factor: thin ones mixed with thicker ones, and
+	// the ones over the wings a bit denser.
+	double factor = near ? 1.3 : 1.0 - kDensVar * Rand01();
 	const Effect& fx = kEffects[PickEffect(g_mix)];
 	FsVfxGraphParam params[16];
 	int nparams = 0;
 	if (fx.kind == FX_CLOUDSURF) {
 		// Above 1 the effect only gets more opaque (MULT above 1x).
-		snprintf(slot->dens, sizeof(slot->dens), "%.4f", fmin(2.0, fmax(0.0, dens)));
+		snprintf(slot->dens, sizeof(slot->dens), "(L:CLOUDSURF_DENS_LIVE, number) %.3f * 0 max 2 min", factor);
 		snprintf(slot->size, sizeof(slot->size), "%.4f", size);
 		// Fade in from now over fade_in, out from L:CLOUDSURF_OUT<n> (far in
 		// the future until FadeOutPuff sets it), and with L:CLOUDSURF_SHOW.
@@ -740,6 +747,11 @@ void Update() {
 
 	bool active = g_cfg.enable > 0.5 && a.speed >= kMinSpeed && (test || in_cloud || ahead >= 0);
 	if (active) g_last_active = a.time;
+
+	if (test) g_dens_live = test_dens;
+	else if (active) g_dens_live = dens;
+	else if (a.time - g_last_active > kDensHold) g_dens_live = fmax(0.0, g_dens_live - dt * g_dens_live / kDensRelease - dt * 0.05);
+	SetL("DENS_LIVE", g_dens_live);
 
 	// L:CLOUDSURF_FADE: being in cloud, smoothed; the landing light beam
 	// follows it.
