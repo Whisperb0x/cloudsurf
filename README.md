@@ -57,7 +57,7 @@ and the light from your aircraft.
 settings (cloud style, including the experimental wisps made from cloud photo
 textures; distance ahead where new clouds appear, 1200 m and never closer than
 500 m; sideways and vertical
-spread; clouds per step; sim density for full thickness, 25 %; beam position
+spread; clouds per step; sim density for full thickness, 10 %; beam position
 and direction) and debug tools (test mode, spawn and clear, live values, a log).
 
 All settings are `L:CLOUDSURF_*` variables, so other tools (MobiFlight,

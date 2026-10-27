@@ -113,7 +113,7 @@ const ConfigVar kConfigVars[] = {
 	{ "LEAD_MAX",   1200.0, &Config::lead_max },  // m ahead where new clouds appear (closer near edges)
 	{ "LATERAL",    80.0,  &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   41.0,  &Config::vertical },   // m up/down spread
-	{ "FULL_PCT",   25.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
+	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
 	{ "MAX_ALIVE",  41.0,  &Config::max_alive },  // clouds at once (frame rate)
 	{ "MULT",       1.5,   &Config::mult },       // thickness
 	{ "CLUSTER",    8.0,   &Config::cluster },    // clouds per spawn step
@@ -144,7 +144,8 @@ const double kTestInterval = 1.0;    // s between test clouds
 // Each cloud fades on its own (CloudFade): in when it appears, slower for the
 // first clouds when entering a cloud, and out when it must go before we pass it.
 const double kFadeInSpawn = 0.8, kFadeInEntry = 2.0, kFadeOutPuff = 1.5;  // s
-const double kExitKeepTime = 2.0;    // s of flight ahead whose clouds stay when we leave a cloud
+const double kExitKeepTime = 2.0;    // s of flight ahead whose clouds stay a moment when we leave a cloud
+const double kExitNearDelay = 1.0;   // s those close clouds stay before they fade too
 
 enum PuffState { PUFF_FREE, PUFF_LIVE, PUFF_FADING, PUFF_STOPPING };
 
@@ -194,7 +195,9 @@ const double kLayerMargin = 30.0;  // m the flight path may be outside its layer
 // Clouds are placed with their centre from kDeckInBase above the base to
 // kDeckInTop below the top, so you fly right into them at the edge.
 const double kDeckInBase = 40.0, kDeckInTop = 50.0;
-const double kVerticalExit = 1.5;  // m/s vertical speed that counts as leaving through top/base
+// Leaving through the top or base: climbing or descending at least this
+// steeply (vertical over total speed, ~2 degrees) and kVerticalExit m/s.
+const double kVerticalExit = 3.0, kVerticalExitSlope = 0.035;
 // Half the height of a cloud per unit of CloudSize: vertical particle spread
 // (5 m) plus the radius of the biggest particles (35 m x 1.4 / 2), see
 // tools/make_cloud_vfx.py.
@@ -204,7 +207,7 @@ double g_last_mix = 0.6;           // density curve value of the last cloud, for
 // Density all clouds follow (L:CLOUDSURF_DENS_LIVE): the current one in cloud;
 // after leaving, the last one is held for the clouds that stay, then let go.
 double g_dens_live = 0.0;
-const double kDensHold = 3.0, kDensRelease = 2.0;  // s
+const double kDensHold = 0.5, kDensRelease = 1.5;  // s
 
 Config g_cfg;
 Puff g_puffs[kMaxPuffs];
@@ -383,15 +386,20 @@ void StopPuff(Puff& p, double now) {
 	p.stop_time = now;
 }
 
-// Fade a cloud out over kFadeOutPuff (its CloudFade reads L:CLOUDSURF_OUT<n>).
-void FadeOutPuff(Puff& p, double now) {
+// Fade a cloud out over kFadeOutPuff, starting after `delay` s (its CloudFade
+// reads L:CLOUDSURF_OUT<n>).
+void FadeOutPuff(Puff& p, double now, double delay = 0.0) {
 	if (p.state != PUFF_LIVE) return;
 	char name[24];
 	snprintf(name, sizeof(name), "OUT%d", PuffIndex(p));
-	SetL(name, now);
+	SetL(name, now + delay);
 	fsVfxStopInstance(p.id);
 	p.state = PUFF_FADING;
-	p.stop_time = now;
+	p.stop_time = now + delay;
+}
+
+bool VerticalExit(const Aircraft& a, double vu) {
+	return fabs(vu) >= fmax(kVerticalExit, kVerticalExitSlope * a.speed);
 }
 
 // Landing light beam (CloudSurfBeam), attached to the user aircraft. The sim
@@ -652,7 +660,7 @@ double DensitySpacing(double dens) {
 // descending (see Layer), in the weather's layer or, without layer data, as
 // the deck seen here.
 void LearnDeck(const Aircraft& a, double alt_m, double vu, bool entering) {
-	if (fabs(vu) < kVerticalExit) return;
+	if (!VerticalExit(a, vu)) return;
 	bool top = entering ? vu < 0 : vu > 0;  // descending into / climbing out of the top
 	if (!g_layers_real) {
 		if (top) g_seen_top = alt_m;
@@ -670,19 +678,21 @@ void LearnDeck(const Aircraft& a, double alt_m, double vu, bool entering) {
 	else g_deck_bot[i] = alt_m;
 }
 
-// Left a cloud (for longer than a short gap): through the top or base, the
-// clouds still above or below us go; otherwise the ones further ahead than
-// kExitKeepTime of flight go. The rest stays until we have passed it.
+// Left a cloud (for longer than a short gap). Clouds further ahead than
+// kExitKeepTime of flight fade out at once, and so do the ones still above or
+// below us when we leave through the top or base. The ones close by stay
+// kExitNearDelay more, so we pass the last bits, then fade too. Meanwhile the
+// live density lets go (kDensHold, kDensRelease).
 void HandleExit(const Aircraft& a) {
 	LearnDeck(a, g_exit_alt, g_exit_vu, false);
+	bool vertical = VerticalExit(a, g_exit_vu);
 	double keep = fmax(150.0, a.speed * kExitKeepTime);
 	for (Puff& p : g_puffs) {
 		if (p.state != PUFF_LIVE) continue;
-		bool go;
-		if (g_exit_vu > kVerticalExit) go = p.alt_m - 0.5 * p.half > a.alt_m - 10.0;         // out of the top
-		else if (g_exit_vu < -kVerticalExit) go = p.alt_m + 0.5 * p.half < a.alt_m + 10.0;   // out of the base
-		else go = AlongTrack(a, p) > keep;
-		if (go) FadeOutPuff(p, a.time);
+		bool beyond = vertical && (g_exit_vu > 0 ? p.alt_m - 0.5 * p.half > a.alt_m - 10.0    // out of the top
+		                                         : p.alt_m + 0.5 * p.half < a.alt_m + 10.0);  // out of the base
+		if (beyond || AlongTrack(a, p) > keep) FadeOutPuff(p, a.time);
+		else FadeOutPuff(p, a.time, kExitNearDelay);
 	}
 }
 

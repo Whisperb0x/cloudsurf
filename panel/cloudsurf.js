@@ -14,7 +14,7 @@
 		["LATERAL",      "Sideways spread",       20, 200, 1,    80,   "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 41, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
-		["FULL_PCT",     "Sim density for full thickness", 5, 80, 1, 25, "%"],
+		["FULL_PCT",     "Sim density for full thickness", 3, 40, 1, 10, "%"],
 		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
 		["BEAM_FWD",     "Beam start ahead",      -10, 60, 1,   10,   "m"],
 		["BEAM_UP",      "Beam start height",     -10, 10, 0.5, -1,   "m"],
@@ -72,6 +72,8 @@
 	let settings = loadSettings();
 	// 800 m was the old default distance; it is 1200 m now.
 	if (settings.LEAD_MAX === 800) delete settings.LEAD_MAX;
+	// 25 % was the old density for full thickness; real decks rarely go over ~10 %.
+	if (settings.FULL_PCT === 25) delete settings.FULL_PCT;
 	const save = () => {
 		const raw = JSON.stringify(settings);
 		try { if (typeof SetStoredData === "function") SetStoredData(STORE_KEY, raw); } catch (e) {}
