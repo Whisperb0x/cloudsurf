@@ -42,13 +42,19 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 Clouds come in random sizes and orientations; about a third are small, dense
 clouds that sweep over the wings and briefly hide them (wing fade).
 
-**Advanced and debug tools** has the rest: cloud style (Classic, or the
-experimental wisps made from cloud photo textures, mixed in or alone),
-test mode (spawns in clear sky), spawn and clear buttons, live values, a log,
-and settings for distance ahead (800–1210 m, from 120 m when entering a cloud),
-spacing, clouds per step, spread, share over the wings, clear zone around the
-flight path, density mapping (cloud density for full effect 25 %, minimum
-0.3 %), the wisps mix, and beam position and direction.
+Most of CloudSurf follows the sim on its own: when clouds start and stop,
+how thick, dark and many they are (the sim's cloud density), how close new
+clouds come (near cloud edges and in steep climbs or descents), staying inside
+the cloud layer (its real top and base are learned as you fly through them),
+which clouds stay or fade out when you leave a cloud, the share over the wings,
+and the light from your aircraft.
+
+**Advanced** shows what is automatic with live values, the few fixed
+settings (cloud style, including the experimental wisps made from cloud photo
+textures; distance ahead where new clouds appear, 800 m; sideways and vertical
+spread; clouds per step; sim density for full thickness, 25 %; beam position
+and direction) and debug tools (test mode, spawn and clear, live values, a log).
+
 All settings are `L:CLOUDSURF_*` variables, so other tools (MobiFlight,
 SPAD.neXt, …) can drive them too. See `kConfigVars` in `src/CloudSurf.cpp`.
 

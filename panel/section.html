@@ -27,13 +27,32 @@
                                         <input type="checkbox" id="csBeam" checked />
                                     </div>
                                     <div class="ctrl-master-toggle">
-                                        <p>Advanced and debug tools</p>
+                                        <p>Advanced: what is automatic, fixed settings, debug</p>
                                         <input type="checkbox" id="csShowDebug" />
                                     </div>
                                 </div>
 
                                 <div id="csDebug" style="display: none;">
-                                <p class="ctrl-section-label">Advanced</p>
+                                <p class="ctrl-section-label">Automatic (follows the sim)</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <ul class="cs-auto">
+                                        <li>Starts on entering a cloud, filling the space ahead at once; the first clouds fade in slower</li>
+                                        <li>Thickness, darkness and number of clouds follow the sim's cloud density</li>
+                                        <li>Near edges (density changing fast) and in steep climbs or descents, new clouds come closer</li>
+                                        <li>Clouds stay inside the cloud layer; its real top and base are learned as you fly through them</li>
+                                        <li>Leaving a cloud: clouds close by stay until passed, the rest fade out (and the ones above or below you when you leave through the top or base)</li>
+                                        <li>A third or more of the clouds sweep over the wings, small and dense (wing fade); more in thin cloud</li>
+                                        <li>Size, heading and density differ per cloud; darker at dusk and night; drifting with the wind; glow from your lights</li>
+                                    </ul>
+                                    <div class="cs-grid">
+                                        <span>New clouds at</span><span id="csLeadNow" class="cs-val">-</span>
+                                        <span>Density change</span><span id="csChange" class="cs-val">-</span>
+                                        <span>Cloud layers</span><span id="csLayers" class="cs-val">-</span>
+                                        <span>Deck here</span><span id="csDeck" class="cs-val">-</span>
+                                    </div>
+                                </div>
+
+                                <p class="ctrl-section-label">Fixed settings</p>
                                 <div class="ctrl-master-big cs-box">
                                     <div class="cs-effect">
                                         <p>Cloud style</p>
@@ -41,13 +60,14 @@
                                         <span class="cs-val" id="csEffectName">-</span>
                                         <button class="cs-btn" id="csEffectNext">&gt;</button>
                                     </div>
+                                    <div id="csSliders"></div>
+                                </div>
+
+                                <p class="ctrl-section-label">Debug</p>
+                                <div class="ctrl-master-big cs-box">
                                     <div class="ctrl-master-toggle">
                                         <p>Test mode (spawn also in clear sky)</p>
                                         <input type="checkbox" id="csTest" />
-                                    </div>
-                                    <div class="ctrl-master-toggle">
-                                        <p>Altitude in feet</p>
-                                        <input type="checkbox" id="csAltFeet" />
                                     </div>
                                     <div class="cs-buttons">
                                         <button class="cs-btn" id="csSpawnNow">Spawn one now</button>
@@ -61,8 +81,6 @@
                                         <span>Cloud density</span><span id="csCloudPct" class="cs-val">-</span>
                                         <span>Patch density</span><span id="csDens" class="cs-val">-</span>
                                         <span>Fade</span><span id="csFade" class="cs-val">-</span>
-                                        <span>Density change</span><span id="csChange" class="cs-val">-</span>
-                                        <span>Cloud layers</span><span id="csLayers" class="cs-val">-</span>
                                         <span>Clouds alive</span><span id="csActive" class="cs-val">-</span>
                                         <span>Spawned</span><span id="csSpawns" class="cs-val">-</span>
                                         <span>Failed spawns</span><span id="csFails" class="cs-val">-</span>
@@ -70,7 +88,6 @@
                                         <span>Ground speed</span><span id="csSpeed" class="cs-val">-</span>
                                     </div>
                                     <pre class="cs-log" id="csLog"></pre>
-                                    <div id="csSliders"></div>
                                 </div>
                                 </div>
                                 <!-- CloudSurf: end -->

@@ -26,7 +26,8 @@ SIM_VARS = [  # (column, simvar, units)
     ("beacon", "LIGHT BEACON", "bool"),
     ("landing", "LIGHT LANDING", "bool"),
 ]
-MOD_VARS = ["HEARTBEAT", "STATE", "ACTIVE", "SPAWNS", "FAILS", "LAST_LEAD", "DENS", "FADE", "SHOW", "CHANGE",
+MOD_VARS = ["HEARTBEAT", "STATE", "ACTIVE", "SPAWNS", "FAILS", "LAST_LEAD", "DENS", "FADE", "SHOW", "CHANGE", "LAYER", "EARLY", "LAYERS", "LAYER1_BOT", "LAYER1_TOP", "LAYER1_COV",
+            "LAYER2_BOT", "LAYER2_TOP", "LAYERS_AGL", "NEAR_SHARE", "SIZE", "GLOW",
             "ENABLE", "TEST", "ALT_FEET", "LEAD_MIN", "LEAD_MAX", "SPACING", "FULL_PCT", "MAX_ALIVE", "MULT",
             "EFFECT", "DENS_VAR", "CLUSTER", "ALT_OFFSET", "VERTICAL", "HOLE", "LATERAL"]
 

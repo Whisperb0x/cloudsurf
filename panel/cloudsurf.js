@@ -2,34 +2,20 @@
 // Talks to the CloudSurf WASM module only through L:CLOUDSURF_* vars.
 (function () {
 	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
-	// show on the main page; the rest only under "Advanced and debug tools".
+	// show on the main page; the rest are the fixed settings under "Advanced".
+	// Everything else follows the sim on its own (see the Automatic box).
 	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "GLOW"];
 	const SLIDERS = [
 		["MAX_ALIVE",    "Clouds around you",     10, 128, 1,    41,   ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 1.5,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
-		["LEAD_MIN",     "Nearest cloud ahead",   20, 1500, 10,  500,  "m"],
-		["LEAD_MAX",     "Farthest cloud ahead",  50, 2000, 10,  800,  "m"],
-		["ENTRY_NEAR",   "Nearest cloud on entering", 20, 600, 10, 120, "m"],
-		["SPACING",      "Minimum distance between clouds", 5, 200, 5, 20, "m"],
+		["LEAD_MAX",     "New clouds appear ahead at (closer near edges)", 300, 2000, 10, 800, "m"],
+		["LATERAL",      "Sideways spread",       20, 200, 1,    80,   "m"],
+		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 41, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
-		["LATERAL",      "Sideways spread",       0,  150, 1,    80,   "m"],
-		["VERTICAL",     "Vertical spread",       0,  100, 1,    41,   "m"],
-		["HOLE",         "Clear zone around flight path", 0, 40, 1, 0, "m"],
-		["BEHIND",       "Remove after passing",  10, 500, 5,    100,  "m"],
-		["FULL_PCT",     "Sim density for full effect", 5, 80, 1, 25, "%"],
-		["MIN_PCT",      "Minimum sim density",   0,  5,   0.1,  0.3,  "%"],
-		["DENS_VAR",     "Density variation",     0,  1,   0.05, 0.25, ""],
-		["MIX_LO",       "Full style: only wisps below", 0, 1, 0.05, 0.3, ""],
-		["MIX_HI",       "Full style: only big clouds above", 0, 1, 0.05, 0.8, ""],
-		["COCKPIT_MULT", "Cockpit view thickness", 0, 1,   0.05, 0.95, "x"],
-		["MIN_SPEED",    "Minimum speed",         0,  150, 5,    25,   "m/s"],
-		["TEST_DENS",    "Test density",          0,  1,   0.05, 1.0,  ""],
-		["TEST_INTERVAL", "Test spawn interval",  0.2, 5,  0.1,  1.0,  "s"],
-		["ALT_OFFSET",   "Altitude offset",       -300, 300, 5,  0,    "m"],
-		["NEAR_SHARE",   "Share over the wings",  0,  1,   0.05, 0.35, ""],
-		["NEAR_VERTICAL", "Over-wing height spread", 0, 30, 1,   4,    "m"],
+		["FULL_PCT",     "Sim density for full thickness", 5, 80, 1, 25, "%"],
+		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
 		["BEAM_FWD",     "Beam start ahead",      -10, 60, 1,   10,   "m"],
 		["BEAM_UP",      "Beam start height",     -10, 10, 0.5, -1,   "m"],
 		["BEAM_HDG",     "Beam direction (heading)", -180, 180, 1, 1, "deg"],
@@ -53,7 +39,6 @@
 	const TOGGLES = [
 		["ENABLE",   "csEnable",  1],
 		["TEST",     "csTest",    0],
-		["ALT_FEET", "csAltFeet", 0],
 		["BEAM",     "csBeam",    1],
 	];
 	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
@@ -324,6 +309,10 @@
 		setText("csCloudPct", isNaN(cloudPct) ? "-" : cloudPct.toFixed(1) + " %");
 		setText("csDens", isNaN(dens) ? "-" : dens.toFixed(2));
 		setText("csFade", isNaN(fade) ? "-" : fade.toFixed(2));
+		const leadNow = getL("LEAD_NOW");
+		setText("csLeadNow", leadNow > 0 ? `${leadNow.toFixed(0)} m` : "-");
+		const deckTop = getL("DECK_TOP"), deckBot = getL("DECK_BOT");
+		setText("csDeck", deckTop > 0 ? `${feet(deckBot)}-${feet(deckTop)} ft` : "-");
 		const layerNow = getL("LAYER");
 		setText("csLayers", layers.length ? `${layers.length}, in #${layerNow || "-"}` : "unknown");
 		const change = getL("CHANGE");
