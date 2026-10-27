@@ -4,11 +4,12 @@
 	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
 	// show on the main page; the rest are the fixed settings under "Advanced".
 	// Everything else follows the sim on its own (see the Automatic box).
-	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "GLOW"];
+	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "WING", "GLOW"];
 	const SLIDERS = [
 		["MAX_ALIVE",    "Clouds around you",     10, 128, 1,    41,   ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 1.5,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
+		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 1200, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    80,   "m"],

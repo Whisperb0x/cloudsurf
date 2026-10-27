@@ -68,7 +68,7 @@ ATLAS_RATE, ATLAS_SIZE = 2.5, 26.0     # more, smaller wisps overlap into more d
 ATLAS_SPREAD_H, ATLAS_SPREAD_V = 18.0, 8.0
 
 # (effect name, uses the atlas material)
-EFFECTS = [("CloudSurf", False), ("CloudSurfWisps", True), ("CloudSurfBeam", "beam")]
+EFFECTS = [("CloudSurf", False), ("CloudSurfWisps", True), ("CloudSurfBeam", "beam"), ("CloudSurfWing", "wing")]
 
 # Landing light beam: attached to the aircraft (local space), glowing mist
 # particles shot forward in a cone. Distance travelled grows with age, so
@@ -80,6 +80,18 @@ BEAM_CONE = 9.0           # degrees, outer half angle
 BEAM_SIZE = (3.0, 40.0)   # m at the nose / at the end
 BEAM_ALPHA = 0.55         # start opacity at full Beam
 BEAM_GLOW = 3.0           # emissive at the nose at full Beam
+
+# Wing fade: attached to the aircraft some way ahead of the wings (CloudSurf
+# sets the offset), it lays small cloud flakes into the world across the
+# wingspan. The aircraft flies through them, so they stream over the wings.
+# CloudSurf drives how many (WingRate, per second, from the speed so it is the
+# same per metre flown) and how dense (WingAlpha) from the live cloud density.
+WING_LIFETIME = 1.6       # s: flakes are passed well before they go
+WING_CAPACITY = 240.0
+WING_SIZE = (4.0, 11.0)   # m, random per flake
+WING_SPREAD_V = 2.5       # m up/down around the wing
+WING_SPREAD_Z = 12.0      # m along the track
+WING_FADE_IN = 0.08       # share of the lifetime
 
 Z = "{00000000-0000-0000-0000-000000000000}"
 # Fixed ids so rebuilding keeps the effect GUID (CloudSurf looks it up).
@@ -422,6 +434,78 @@ def build_beam(name):
     return effect
 
 
+def build_wing(name):
+    effect, emitter, init, update, output = (gid(n) for n in ("effect", "emitter", "init", "update", "output"))
+
+    rate = param("WingRate", 0.0, (-700, -300))      # flakes per second
+    walpha = param("WingAlpha", 0.0, (-700, 100))    # 0..1 opacity
+    half = param("WingHalfSpan", 15.0, (-700, -150))  # m
+    shade = param("CloudShade", 1.0, (-700, 250))
+    calpha = param("CloudAlpha", 1.0, (-700, 400))
+
+    age = attribute("age", "AgeOverLifetime", False, (-450, 400))
+    src_size = attribute("srcsize", "Size", True, (-450, 520))
+    pid = attribute("pid", "id", False, (-950, 300))
+
+    # anywhere across the wingspan, a little up/down, spread along the track
+    rx = random("rx", -1.0, 1.0, pid, 1, (-800, -300))
+    x = math_node("MultiplyOperation", "x", rx, half, (-650, -300))
+    ry = random("ry", -WING_SPREAD_V, WING_SPREAD_V, pid, 2, (-800, -220))
+    rz = random("rz", -WING_SPREAD_Z, WING_SPREAD_Z, pid, 3, (-800, -140))
+    start = vector3("startpos", [(x, 0), (ry, 0), (rz, 0)], (-500, -220))
+    rrot = random("rrot", 0.0, 6.283, pid, 4, (-800, -60))
+    rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
+    rsize = random("rsize", WING_SIZE[0], WING_SIZE[1], pid, 5, (-800, 20))
+    grow = lerp("growf", None, None, age, (-150, 400), xv=0.8, yv=1.0)
+    upd_size = math_node("MultiplyOperation", "updsize", grow, src_size, (-50, 450))
+
+    wind = out("wind")
+    node("WindDirection", "wind", f"            <OutputValue>{wind}</OutputValue>\n", (-450, 640))
+
+    # opacity: WingAlpha at night less, quick fade in, out over the second half
+    a0 = math_node("MultiplyOperation", "alphanight", walpha, calpha, (-350, 130))
+    fin = clamp("fadein", math_node("MultiplyOperation", "fadeint", age, None, (-450, 180), yv=1.0 / WING_FADE_IN),
+                0.0, 1.0, (-350, 200))
+    fout = clamp("fadeout", lerp("fadeoutt", None, None, age, (-450, 260), xv=2.0, yv=0.0), 0.0, 1.0, (-350, 260))
+    alpha = math_node("MultiplyOperation", "alpha",
+                      math_node("MultiplyOperation", "fade", fin, fout, (-250, 220)), a0, (-150, 180))
+    grey_d = lerp("grey", None, None, walpha, (-450, -20), xv=0.8, yv=0.45)
+    grey = math_node("MultiplyOperation", "greyshade", grey_d, shade, (-350, -20))
+    colour = vector4("colour", [(grey, 0), (grey, 0), (grey, 0), (alpha, 0)], (-50, 60))
+
+    node("VisualEffect", "effect",
+         f"            <Name>{name}</Name>\n"
+         "            <EmitterList>\n"
+         f'                <ObjectReference InstanceId="{emitter}" id="Emitter"/>\n'
+         "            </EmitterList>\n", (300, -100))
+    node("Emitter", "emitter",
+         pin("ParticleRate", rate, 0.0)
+         + f"            <Capacity>{f(WING_CAPACITY)}</Capacity>\n"
+         + f"            <MaxDistanceEmission>{f(MAX_DISTANCE)}</MaxDistanceEmission>\n"
+         "            <ParticleInit>\n"
+         f'                <ObjectReference InstanceId="{init}" id="BlockParticleInit"/>\n'
+         "            </ParticleInit>\n", (300, 0))
+    node("BlockParticleInit", "init",
+         "            <ParticleUpdate>\n"
+         f'                <ObjectReference InstanceId="{update}" id="BlockParticleUpdate"/>\n'
+         "            </ParticleUpdate>\n"
+         f"            <ParticleLifetime>\n    {pin('FloatIn', None, WING_LIFETIME)}            </ParticleLifetime>\n"
+         f"            <ParticleSize>\n    {pin('FloatIn', rsize, 0)}            </ParticleSize>\n"
+         f"            <ParticlePosition>\n                {float3(start)}\n            </ParticlePosition>\n"
+         f"            <ParticleRotation>\n                {float3(rot)}\n            </ParticleRotation>\n"
+         f"            <ParticleVelocity>\n                {float3(None)}\n            </ParticleVelocity>\n", (300, 200))
+    node("BlockParticleUpdate", "update",
+         "            <ParticleOutput>\n"
+         f'                <ObjectReference InstanceId="{output}" id="Output"/>\n'
+         "            </ParticleOutput>\n"
+         f"            <ParticleVelocity>\n                {float3(wind)}\n            </ParticleVelocity>\n"
+         f"            <ParticleSize>\n    {pin('FloatIn', upd_size, 0)}            </ParticleSize>\n", (300, 420))
+    node("Output", "output",
+         f"            <ParticleColor>\n                <ColorIn>{colour}, 0, 0, 0, 0</ColorIn>\n"
+         "            </ParticleColor>\n", (300, 620))
+    return effect
+
+
 def write():
     global PREFIX
     for name, atlas in EFFECTS:
@@ -430,6 +514,8 @@ def write():
         positions.clear()
         if atlas == "beam":
             build_beam(name)
+        elif atlas == "wing":
+            build_wing(name)
         else:
             build(name, atlas)
         doc = ('\ufeff<?xml version="1.0" encoding="UTF-8"?>\n\n'

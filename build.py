@@ -50,8 +50,9 @@ PANEL_XML = f"""<?xml version="1.0" encoding="utf-8"?>
 EFFECTS_PLACEHOLDER = "/*@EFFECTS@*/[]"
 
 # Effect kinds, as in CloudSurf.cpp: 2 = cloud effect (selectable),
-# 3 = landing light beam (attached to the aircraft, not selectable).
-FX_CLOUD, FX_BEAM = 2, 3
+# 3 = landing light beam, 4 = wing fade (both attached to the aircraft, not
+# selectable).
+FX_CLOUD, FX_BEAM, FX_WING = 2, 3, 4
 
 
 def read_raw(path):
@@ -90,11 +91,11 @@ def own_effects():
         xml = read_raw(VFX_SRC / f"{name}.xml")
         m = re.search(r'<VisualEffect\.VisualEffect InstanceId="\{([0-9A-Fa-f-]+)\}"', xml)
         if m:
-            kind = FX_BEAM if name.endswith("Beam") else FX_CLOUD
+            kind = FX_BEAM if name.endswith("Beam") else FX_WING if name.endswith("Wing") else FX_CLOUD
             effects.append((name, m.group(1).upper(), kind))
     if not effects:
         sys.exit(f"no effects found in {VFX_SRC}; run tools/make_cloud_vfx.py")
-    effects.sort(key=lambda e: e[2] == FX_BEAM)
+    effects.sort(key=lambda e: e[2] != FX_CLOUD)
     return effects
 
 
@@ -104,7 +105,7 @@ def write_effects_header(effects):
     for i, (label, guid, kind) in enumerate(effects):
         lines.append(f'\t{{ "{guid}", {kind} }},  // {i} {label}')
     lines.append("};")
-    lines.append(f"const int kSelectableEffects = {sum(1 for e in effects if e[2] != FX_BEAM)};")
+    lines.append(f"const int kSelectableEffects = {sum(1 for e in effects if e[2] == FX_CLOUD)};")
     (HERE / "src" / "effects_gen.h").write_text("\n".join(lines) + "\n")
 
 
@@ -152,7 +153,7 @@ def compile_wasm(out_wasm):
 def panel_html(effects):
     html = read_raw(HERE / "panel" / "standalone.html")
     js = read_raw(HERE / "panel" / "cloudsurf.js")
-    js = js.replace(EFFECTS_PLACEHOLDER, json.dumps([label for label, _, kind in effects if kind != FX_BEAM]))
+    js = js.replace(EFFECTS_PLACEHOLDER, json.dumps([label for label, _, kind in effects if kind == FX_CLOUD]))
     for marker, text in (("/*@STANDALONE_CSS@*/", read_raw(HERE / "panel" / "standalone.css")),
                          ("/*@CLOUDSURF_CSS@*/", read_raw(HERE / "panel" / "cloudsurf.css")),
                          ("<!--@CLOUDSURF_SECTION@-->", read_raw(HERE / "panel" / "section.html")),
