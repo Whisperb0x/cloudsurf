@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -181,14 +182,31 @@ def generate():
           f"then python build.py --install")
 
 
+def remove_tree(path):
+    """rmtree that also clears read-only flags (folders copied from OneDrive
+    come read-only). Returns False if something is left, e.g. in use by the sim."""
+    def writable_retry(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=writable_retry)
+    else:
+        shutil.rmtree(path, onerror=writable_retry)
+    return not path.exists()
+
+
 def install(community):
     if not (BUILT_PACKAGE / "layout.json").exists():
         sys.exit(f"Not built yet: {BUILT_PACKAGE}. Build All in the sim first.")
     for name in LEGACY_PACKAGES:
         old = community / name
         if old.exists():
-            shutil.rmtree(old, ignore_errors=True)
-            print(f"Removed older version {old}")
+            try:
+                done = remove_tree(old)
+            except OSError:
+                done = False
+            print(f"Removed older version {old}" if done else
+                  f"Could not fully remove {old}; close the sim and delete it")
     dest = community / PACKAGE
     # File by file: a running sim keeps some files open, removing the folder
     # first would fail halfway.
@@ -213,7 +231,7 @@ def uninstall(community):
     for name in [PACKAGE] + LEGACY_PACKAGES:
         pkg = community / name
         if pkg.exists():
-            shutil.rmtree(pkg)
+            remove_tree(pkg)
             print(f"Removed {pkg}")
 
 
