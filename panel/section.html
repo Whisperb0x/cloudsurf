@@ -1,0 +1,58 @@
+                                <!-- CloudPass: begin -->
+                                <p class="ctrl-section-label">CloudPass</p>
+                                <div class="ctrl-master-big cp-box">
+                                    <div class="ctrl-master-toggle">
+                                        <p>Clouds passing by when flying through clouds</p>
+                                        <input type="checkbox" id="cpEnable" checked />
+                                    </div>
+                                    <div id="cpMain"></div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Landing light beam in cloud</p>
+                                        <input type="checkbox" id="cpBeam" checked />
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Show debug tools</p>
+                                        <input type="checkbox" id="cpShowDebug" />
+                                    </div>
+                                </div>
+
+                                <div id="cpDebug" style="display: none;">
+                                <p class="ctrl-section-label">CloudPass debug</p>
+                                <div class="ctrl-master-big cp-box">
+                                    <div class="cp-effect">
+                                        <p>Effect</p>
+                                        <button class="cp-btn" id="cpEffectPrev">&lt;</button>
+                                        <span class="cp-val" id="cpEffectName">-</span>
+                                        <button class="cp-btn" id="cpEffectNext">&gt;</button>
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Test mode (spawn also in clear sky)</p>
+                                        <input type="checkbox" id="cpTest" />
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Altitude in feet</p>
+                                        <input type="checkbox" id="cpAltFeet" />
+                                    </div>
+                                    <div class="cp-buttons">
+                                        <button class="cp-btn" id="cpSpawnNow">Spawn one now</button>
+                                        <button class="cp-btn" id="cpClear">Clear all</button>
+                                        <button class="cp-btn" id="cpReset">Reset to defaults</button>
+                                    </div>
+                                    <div class="cp-grid">
+                                        <span>Module</span><span id="cpRunning" class="cp-val">-</span>
+                                        <span>State</span><span id="cpState" class="cp-val">-</span>
+                                        <span>In cloud</span><span id="cpInCloud" class="cp-val">-</span>
+                                        <span>Cloud density</span><span id="cpCloudPct" class="cp-val">-</span>
+                                        <span>Patch density</span><span id="cpDens" class="cp-val">-</span>
+                                        <span>Clouds alive</span><span id="cpActive" class="cp-val">-</span>
+                                        <span>Spawned</span><span id="cpSpawns" class="cp-val">-</span>
+                                        <span>Failed spawns</span><span id="cpFails" class="cp-val">-</span>
+                                        <span>Camera</span><span id="cpCamera" class="cp-val">-</span>
+                                        <span>Ground speed</span><span id="cpSpeed" class="cp-val">-</span>
+                                    </div>
+                                    <pre class="cp-log" id="cpLog"></pre>
+                                    <div id="cpSliders"></div>
+                                </div>
+                                </div>
+                                <!-- CloudPass: end -->
+

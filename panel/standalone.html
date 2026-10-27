@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/SCSS/common.css" />
+    <script type="text/javascript" src="/JS/coherent.js"></script>
+    <script type="text/javascript" src="/JS/common.js"></script>
+    <script type="text/javascript" src="/JS/simvar.js"></script>
+    <script type="text/javascript" src="/JS/dataStorage.js"></script>
+    <script type="text/javascript" src="/JS/Services/ToolBarPanels.js"></script>
+    <script type="text/javascript">
+class IngamePanelCloudPass extends TemplateElement {
+    constructor() {
+        super(...arguments);
+    }
+    connectedCallback() {
+        super.connectedCallback();
+    }
+}
+window.customElements.define("ingamepanel-cloudpass", IngamePanelCloudPass);
+if (typeof checkAutoload !== "undefined") {
+    checkAutoload();
+}
+    </script>
+    <link rel="import" href="/templates/ingameUi/ingameUi.html" />
+    <link rel="import" href="/templates/ingameUiHeader/ingameUiHeader.html" />
+    <style>
+/*@STANDALONE_CSS@*/
+/*@CLOUDPASS_CSS@*/
+    </style>
+</head>
+<body class="border-box">
+    <ingamepanel-cloudpass>
+        <ingame-ui id="CloudPassPanel" panel-id="PANEL_CLOUDPASS" title="CloudPass" class="ingameUiFrame panelInvisible" content-fit="true" resize="both" min-width="420" min-height="300">
+            <div class="cp-scroll">
+<!--@CLOUDPASS_SECTION@-->
+            </div>
+        </ingame-ui>
+    </ingamepanel-cloudpass>
+    <script type="text/javascript">
+/*@CLOUDPASS_JS@*/
+    </script>
+</body>
+</html>

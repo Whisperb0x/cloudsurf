@@ -1,0 +1,38 @@
+/* CloudPass panel section; the ctrl-* base classes are in standalone.css. */
+.cp-box { flex-direction: column; align-items: stretch; }
+.cp-row { margin-top: 6px; }
+.cp-buttons { display: flex; flex-wrap: wrap; margin-top: 8px; }
+.cp-effect { display: flex; align-items: center; margin-top: 8px; }
+.cp-effect p { margin-right: 12px; }
+.cp-effect .cp-btn { margin: 0 8px; }
+.cp-btn {
+	margin: 0 8px 6px 0;
+	padding: 6px 12px;
+	border-radius: 6px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	cursor: pointer;
+}
+.cp-btn:hover { background: rgba(255, 255, 255, 0.2); }
+/* Coherent GT has no CSS grid; two columns via flex-wrap. */
+.cp-grid {
+	display: flex;
+	flex-wrap: wrap;
+	margin-top: 8px;
+	font-size: 0.9em;
+}
+.cp-grid span { width: 50%; padding: 2px 0; opacity: 0.75; }
+.cp-grid .cp-val { opacity: 1; font-weight: bold; }
+.cp-ok { color: #7dff9a; }
+.cp-bad { color: #ff7d7d; }
+.cp-log {
+	margin-top: 8px;
+	padding: 6px 8px;
+	min-height: 4em;
+	border-radius: 6px;
+	background: rgba(0, 0, 0, 0.35);
+	font-family: monospace;
+	font-size: 0.8em;
+	white-space: pre-wrap;
+}
