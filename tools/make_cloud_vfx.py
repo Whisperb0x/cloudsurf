@@ -306,9 +306,10 @@ def build(name, atlas):
     tex = ""
     if atlas:
         cell = random("rcell", 0.0, ATLAS_CELLS * ATLAS_CELLS - 0.001, pid, 6, (-800, 100))
-        tex = (f"            <ParticleTextureIndex>\n    {pin('FloatIn', cell, 0)}            </ParticleTextureIndex>\n"
-               f"            <ParticleQuadBillboardAxis>\n                <Float3In>{Z}, 0.000000, 1.000000, 0.000000</Float3In>\n"
-               "            </ParticleQuadBillboardAxis>\n")
+        # same order as BlockParticleInit in the sim's Propdefs
+        tex = (f"            <ParticleQuadBillboardAxis>\n                <QuadBillboardAxis>{Z}, 0.000000, 1.000000, 0.000000</QuadBillboardAxis>\n"
+               "            </ParticleQuadBillboardAxis>\n"
+               f"            <ParticleTextureIndex>\n    {pin('FloatIn', cell, 0)}            </ParticleTextureIndex>\n")
 
     node("VisualEffect", "effect",
          f"            <Name>{name}</Name>\n"

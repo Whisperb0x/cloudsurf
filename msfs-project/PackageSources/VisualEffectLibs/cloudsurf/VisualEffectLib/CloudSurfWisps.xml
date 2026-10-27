@@ -629,12 +629,12 @@
             <ParticleVelocity>
                 <Float3In>{00000000-0000-0000-0000-000000000000}, 0.000000, 0.000000, 0.000000</Float3In>
             </ParticleVelocity>
+            <ParticleQuadBillboardAxis>
+                <QuadBillboardAxis>{00000000-0000-0000-0000-000000000000}, 0.000000, 1.000000, 0.000000</QuadBillboardAxis>
+            </ParticleQuadBillboardAxis>
             <ParticleTextureIndex>
                 <FloatIn>{5653254B-D51A-5576-ACC7-70E9C5E29FBF}, 0.000000</FloatIn>
             </ParticleTextureIndex>
-            <ParticleQuadBillboardAxis>
-                <Float3In>{00000000-0000-0000-0000-000000000000}, 0.000000, 1.000000, 0.000000</Float3In>
-            </ParticleQuadBillboardAxis>
         </VisualEffect.BlockParticleInit>
         <VisualEffect.BlockParticleUpdate InstanceId="{6D1D99BD-4ED6-5F59-B214-2B0A032BDA13}">
             <ParticleOutput>
