@@ -183,6 +183,12 @@ int g_layer_count = 0;
 int g_layer_now = -1;              // layer the aircraft is in or about to enter
 double g_deck_top[kMaxLayers], g_deck_bot[kMaxLayers];
 double g_layer_sig = 0.0;          // layers changed: forget what was learned
+// Without layer data (the panel only gets it once it has been opened) the deck
+// is learned from the flight alone: g_seen_top/bot (0 = not seen), valid within
+// kSeenRadius of where it was seen, and used as a layer of its own.
+bool g_layers_real = false;
+double g_seen_top = 0.0, g_seen_bot = 0.0, g_seen_lat = 0.0, g_seen_lon = 0.0;
+const double kSeenRadius = 40000.0;  // m
 const double kLayerMargin = 30.0;  // m the flight path may be outside its layer and still get clouds
 // Clouds are placed with their centre from kDeckInBase above the base to
 // kDeckInTop below the top, so you fly right into them at the edge.
@@ -293,18 +299,33 @@ void ReadLayers(const Aircraft& a) {
 		snprintf(name, sizeof(name), "LAYER%d_DENS", i + 1); l.dens = GetL(name);
 		if (l.top_m > l.bot_m && l.cov > 0.0) g_layers[g_layer_count++] = l;
 	}
+	g_layers_real = g_layer_count > 0;
+	if (g_layers_real || (g_seen_top <= 0.0 && g_seen_bot <= 0.0)) return;
+	double dn = (a.lat - g_seen_lat) / kDeg * kEarthR;
+	double de = (a.lon - g_seen_lon) / kDeg * kEarthR * cos(a.lat / kDeg);
+	if (dn * dn + de * de > kSeenRadius * kSeenRadius) {
+		g_seen_top = g_seen_bot = 0.0;  // somewhere else now
+		return;
+	}
+	Layer l;
+	l.bot_m = g_seen_bot > 0.0 ? g_seen_bot : -1e5;
+	l.top_m = g_seen_top > 0.0 ? g_seen_top : 1e5;
+	l.cov = g_seen_top > 0.0 && g_seen_bot > 0.0 ? 1.0 : 0.0;  // early start only with both known
+	l.dens = 1.0;
+	g_layers[g_layer_count++] = l;
 }
 
 // Top and base of a layer: what was seen of the real deck where known.
 double LayerTop(int i) {
-	return g_deck_top[i] > 0.0 ? fmin(g_layers[i].top_m, g_deck_top[i]) : g_layers[i].top_m;
+	return g_layers_real && g_deck_top[i] > 0.0 ? fmin(g_layers[i].top_m, g_deck_top[i]) : g_layers[i].top_m;
 }
 double LayerBot(int i) {
-	return g_deck_bot[i] > 0.0 ? fmax(g_layers[i].bot_m, g_deck_bot[i]) : g_layers[i].bot_m;
+	return g_layers_real && g_deck_bot[i] > 0.0 ? fmax(g_layers[i].bot_m, g_deck_bot[i]) : g_layers[i].bot_m;
 }
 
 // Forget the learned deck when the weather's layers change.
 void CheckLayersChanged() {
+	if (!g_layers_real) return;
 	double sig = 0.0;
 	for (int i = 0; i < g_layer_count; ++i)
 		sig += (i + 1) * (g_layers[i].bot_m + 3.0 * g_layers[i].top_m + 7.0 * g_layers[i].cov);
@@ -627,11 +648,23 @@ double DensitySpacing(double dens) {
 }
 
 // Learn the real deck from crossing its top or base while climbing or
-// descending (see Layer).
-void LearnDeck(double alt_m, double vu, bool entering) {
-	int i = LayerAt(alt_m);
-	if (i < 0 || fabs(vu) < kVerticalExit) return;
+// descending (see Layer), in the weather's layer or, without layer data, as
+// the deck seen here.
+void LearnDeck(const Aircraft& a, double alt_m, double vu, bool entering) {
+	if (fabs(vu) < kVerticalExit) return;
 	bool top = entering ? vu < 0 : vu > 0;  // descending into / climbing out of the top
+	if (!g_layers_real) {
+		if (top) g_seen_top = alt_m;
+		else g_seen_bot = alt_m;
+		if (g_seen_top > 0.0 && g_seen_bot > 0.0 && g_seen_bot >= g_seen_top) {
+			if (top) g_seen_bot = 0.0; else g_seen_top = 0.0;  // another deck: keep the new one
+		}
+		g_seen_lat = a.lat;
+		g_seen_lon = a.lon;
+		return;
+	}
+	int i = LayerAt(alt_m);
+	if (i < 0) return;
 	if (top) g_deck_top[i] = alt_m;
 	else g_deck_bot[i] = alt_m;
 }
@@ -640,7 +673,7 @@ void LearnDeck(double alt_m, double vu, bool entering) {
 // clouds still above or below us go; otherwise the ones further ahead than
 // kExitKeepTime of flight go. The rest stays until we have passed it.
 void HandleExit(const Aircraft& a) {
-	LearnDeck(g_exit_alt, g_exit_vu, false);
+	LearnDeck(a, g_exit_alt, g_exit_vu, false);
 	double keep = fmax(150.0, a.speed * kExitKeepTime);
 	for (Puff& p : g_puffs) {
 		if (p.state != PUFF_LIVE) continue;
@@ -722,7 +755,7 @@ void Update() {
 	// Entering and leaving cloud: learn the deck, and on a real exit (longer
 	// than a short gap) clear what no longer belongs.
 	if (!test) {
-		if (in_cloud && !g_was_cloudy && !g_exit_pending) LearnDeck(a.alt_m, a.vu, true);
+		if (in_cloud && !g_was_cloudy && !g_exit_pending) LearnDeck(a, a.alt_m, a.vu, true);
 		if (!in_cloud && g_was_cloudy) {
 			g_exit_pending = true;
 			g_exit_time = a.time;
@@ -732,8 +765,13 @@ void Update() {
 		if (in_cloud) {
 			g_exit_pending = false;
 			int i = LayerAt(a.alt_m);  // in cloud beyond what was learned: widen it
-			if (i >= 0 && g_deck_top[i] > 0.0 && a.alt_m > g_deck_top[i]) g_deck_top[i] = a.alt_m;
-			if (i >= 0 && g_deck_bot[i] > 0.0 && a.alt_m < g_deck_bot[i]) g_deck_bot[i] = a.alt_m;
+			if (g_layers_real) {
+				if (i >= 0 && g_deck_top[i] > 0.0 && a.alt_m > g_deck_top[i]) g_deck_top[i] = a.alt_m;
+				if (i >= 0 && g_deck_bot[i] > 0.0 && a.alt_m < g_deck_bot[i]) g_deck_bot[i] = a.alt_m;
+			} else {
+				if (g_seen_top > 0.0 && a.alt_m > g_seen_top) g_seen_top = a.alt_m;
+				if (g_seen_bot > 0.0 && a.alt_m < g_seen_bot) g_seen_bot = a.alt_m;
+			}
 		} else if (g_exit_pending && a.time - g_exit_time >= kExitHold) {
 			g_exit_pending = false;
 			HandleExit(a);
