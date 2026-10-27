@@ -177,7 +177,11 @@ const int kMaxLayers = 3;
 Layer g_layers[kMaxLayers];
 int g_layer_count = 0;
 int g_layer_now = -1;              // layer the aircraft is in or about to enter
-const double kLayerMargin = 30.0;  // m clouds may stick out of their layer
+const double kLayerMargin = 30.0;  // m the flight path may be outside its layer and still get clouds
+// Half the height of a cloud per unit of CloudSize: vertical particle spread
+// (5 m) plus the radius of the biggest particles (35 m x 1.4 / 2), see
+// tools/make_cloud_vfx.py.
+const double kCloudHalfHeight = 30.0;
 const double kPreCoverage = 0.6;   // start early only into layers at least this covered
 double g_last_mix = 0.6;           // density curve value of the last cloud, for early starts
 
@@ -420,15 +424,25 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 		}
 	}
 
+	// Small to big with most of them medium-small: 0.35..2.4 (over the wings
+	// 0.3..0.6), times SIZE.
+	double r = Rand01();
+	double size = (near ? 0.3 + 0.3 * r : 0.35 + 2.05 * pow(r, 1.6)) * g_cfg.size;
+
 	double e = fe * lead + re * side;
 	double n = fn * lead + rn * side;
 	double u = fu * lead + up + g_cfg.alt_offset;
 	OffsetToWorld(a, e, n, u, slot->lat, slot->lon, slot->alt_m);
-	// Keep clouds inside the layer we fly in: none in the clear air above or
-	// below it when the flight path leaves the layer.
+	// In a known layer: only where we are still in the layer when we get there
+	// (no clouds appearing below or above us after climbing or descending out
+	// of it), and the whole cloud within the layer, its height included.
 	if (g_layer_now >= 0) {
 		const Layer& l = g_layers[g_layer_now];
-		if (slot->alt_m > l.top_m + kLayerMargin || slot->alt_m < l.bot_m - kLayerMargin) return false;
+		double path_alt = a.alt_m + fu * lead;
+		if (path_alt > l.top_m + kLayerMargin || path_alt < l.bot_m - kLayerMargin) return false;
+		double half = kCloudHalfHeight * size;
+		double lo = l.bot_m + half, hi = l.top_m - half;
+		slot->alt_m = lo > hi ? 0.5 * (l.bot_m + l.top_m) : fmin(hi, fmax(lo, slot->alt_m));
 	}
 
 	// Each cloud faces its own way (its spread is wider than high, so this
@@ -446,11 +460,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 	if (fx.kind == FX_CLOUDSURF) {
 		// Above 1 the effect only gets more opaque (MULT above 1x).
 		snprintf(slot->dens, sizeof(slot->dens), "%.4f", fmin(2.0, fmax(0.0, dens)));
-		// Small to big with most of them medium-small: 0.35..2.4 (over the
-		// wings 0.3..0.6), times SIZE.
-		double r = Rand01();
-		double size = near ? 0.3 + 0.3 * r : 0.35 + 2.05 * pow(r, 1.6);
-		snprintf(slot->size, sizeof(slot->size), "%.4f", size * g_cfg.size);
+		snprintf(slot->size, sizeof(slot->size), "%.4f", size);
 		static const char* kLightNames[3] = { "LightX", "LightY", "LightZ" };
 		static const char* kBeamNames[3] = { "BeamX", "BeamY", "BeamZ" };
 		for (int i = 0; i < 3; ++i) {
