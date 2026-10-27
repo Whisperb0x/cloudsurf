@@ -21,6 +21,10 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
    Community folder.
 2. Start the sim and open **CloudSurf** from the toolbar. If the button does not
    show, enable it in the toolbar settings.
+   **Open the panel once after loading a flight**: it reads the cloud layers of
+   the active weather, so CloudSurf knows where decks start and end even the
+   first time you climb or descend through one. They stay known after you close
+   the panel. Without that, CloudSurf learns each deck as you fly through it.
 3. If another add-on also adds a wing fade or in-cloud effect, switch that off;
    otherwise you get both effects.
 
@@ -51,7 +55,8 @@ and the light from your aircraft.
 
 **Advanced** shows what is automatic with live values, the few fixed
 settings (cloud style, including the experimental wisps made from cloud photo
-textures; distance ahead where new clouds appear, 800 m; sideways and vertical
+textures; distance ahead where new clouds appear, 1200 m and never closer than
+500 m; sideways and vertical
 spread; clouds per step; sim density for full thickness, 25 %; beam position
 and direction) and debug tools (test mode, spawn and clear, live values, a log).
 

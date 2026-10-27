@@ -110,7 +110,7 @@ struct ConfigVar { const char* name; double def; double Config::* field; };
 // Balanced preset).
 const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
-	{ "LEAD_MAX",   800.0, &Config::lead_max },   // m ahead where new clouds appear (closer near edges)
+	{ "LEAD_MAX",   1200.0, &Config::lead_max },  // m ahead where new clouds appear (closer near edges)
 	{ "LATERAL",    80.0,  &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   41.0,  &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   25.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
@@ -132,7 +132,8 @@ const ConfigVar kConfigVars[] = {
 // Fixed values.
 const double kMinPct = 0.3;          // sim cloud density (%) below which no clouds come
 const double kMinSpeed = 25.0;       // m/s, no clouds below this
-const double kEntryNear = 120.0;     // m ahead, nearest cloud when entering a cloud
+const double kEntryNear = 200.0;     // m ahead, nearest cloud when entering a cloud
+const double kLeadMin = 500.0;       // m ahead new clouds appear at least, however the density changes
 const double kMinSpacing = 15.0;     // m flown per spawn step, at least
 const double kBehind = 100.0;        // m behind us a cloud is removed
 const double kDensVar = 0.25;        // random thinning per cloud
@@ -619,8 +620,8 @@ double CloudDens(const Aircraft& a, double dt) {
 // moment so a short swing still counts; *rising tells the direction.
 const double kChangeLo = 0.15, kChangeHi = 0.8;  // relative change per second
 const double kChangeHold = 0.5;                   // per second the reaction fades
-const double kLeadShrink = 0.6;                   // spawn distance at full change, thickening: 40% of LEAD_MAX
-const double kLeadShrinkThin = 0.75;              // thinning (towards an exit): 25%
+const double kLeadShrink = 0.35;                  // spawn distance at full change, thickening: 65% of LEAD_MAX
+const double kLeadShrinkThin = 0.5;               // thinning (towards an exit): 50%
 
 double DensityChange(const Aircraft& a, double dt, bool* rising) {
 	g_pct_fast += (a.cloud_pct - g_pct_fast) * fmin(1.0, dt * 4.0);
@@ -839,8 +840,8 @@ void Update() {
 			// stay on the path.
 			spacing *= rising ? 1.0 - 0.4 * change : 1.0 + 0.5 * change;
 			double shrink = (rising ? kLeadShrink : kLeadShrinkThin) * change;
-			double steep = fmin(0.5, 3.0 * fabs(a.vu) / fmax(1.0, a.speed));
-			double lead_far = fmax(g_cfg.lead_max * (1.0 - shrink) * (1.0 - steep), kEntryNear + spacing);
+			double steep = fmin(0.35, 2.0 * fabs(a.vu) / fmax(1.0, a.speed));
+			double lead_far = fmax(g_cfg.lead_max * (1.0 - shrink) * (1.0 - steep), fmin(kLeadMin, g_cfg.lead_max));
 			double lead_near = 0.6 * lead_far;
 			lead_now = lead_far;
 			// First entry. The sim only reports the cloud we are in, not one

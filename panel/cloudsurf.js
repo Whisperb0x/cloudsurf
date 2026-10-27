@@ -10,7 +10,7 @@
 		["MULT",         "Thickness",             0,  2,   0.05, 1.5,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
-		["LEAD_MAX",     "New clouds appear ahead at (closer near edges)", 300, 2000, 10, 800, "m"],
+		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 1200, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    80,   "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 41, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
@@ -70,6 +70,8 @@
 		return {};
 	}
 	let settings = loadSettings();
+	// 800 m was the old default distance; it is 1200 m now.
+	if (settings.LEAD_MAX === 800) delete settings.LEAD_MAX;
 	const save = () => {
 		const raw = JSON.stringify(settings);
 		try { if (typeof SetStoredData === "function") SetStoredData(STORE_KEY, raw); } catch (e) {}
