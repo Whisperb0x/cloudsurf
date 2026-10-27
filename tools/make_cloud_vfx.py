@@ -43,7 +43,7 @@ MAX_DISTANCE = 10000.0
 LIFETIME = 20.0
 SIZE = 35.0           # metres, before CloudSize
 ALPHA_THIN, ALPHA_DENSE = 0.30, 0.85   # start alpha at density 0 / 1 (CloudDensity goes up to 2)
-GREY_THIN, GREY_DENSE = 0.75, 0.25     # colour at density 0 / 1 (before CloudShade)
+GREY_THIN, GREY_DENSE = 0.9, 0.85     # neutral light grey: the sim's light decides how dark (times CloudTone)
 WIND_FACTOR = 1.0     # 1 = particles move with the wind
 SPREAD_H, SPREAD_V = 12.0, 5.0         # m random start position per particle (flat cloud)
 SIZE_VAR = (0.6, 1.4)                  # random size factor per particle
@@ -509,7 +509,7 @@ def build_wing(name):
                  0.0, 1.0, (-350, 260))
     alpha = math_node("MultiplyOperation", "alpha",
                       math_node("MultiplyOperation", "fade", fin, fout, (-250, 220)), a0, (-150, 180))
-    grey_d = lerp("grey", None, None, walpha, (-450, -20), xv=0.8, yv=0.45)
+    grey_d = lerp("grey", None, None, walpha, (-450, -20), xv=0.9, yv=0.85)
     grey = math_node("MultiplyOperation", "greyshade", grey_d, tone, (-350, -20))
     diffuse = math_node("MultiplyOperation", "diffuse", grey, lit, (-250, -20))
     unlit = math_node("MultiplyOperation", "unlit",

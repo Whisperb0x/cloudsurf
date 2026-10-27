@@ -6,15 +6,15 @@
 	// Everything else follows the sim on its own (see the Automatic box).
 	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "BRIGHT", "WING", "GLOW"];
 	const SLIDERS = [
-		["MAX_ALIVE",    "Clouds around you",     10, 128, 1,    41,   ""],
-		["MULT",         "Thickness",             0,  2,   0.05, 1.5,  "x"],
+		["MAX_ALIVE",    "Clouds around you",     10, 128, 1,    60,   ""],
+		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (match the sim's cloud)", 0.2, 3, 0.05, 1.0, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 1200, "m"],
-		["LATERAL",      "Sideways spread",       20, 200, 1,    80,   "m"],
-		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 41, "m"],
+		["LATERAL",      "Sideways spread",       20, 200, 1,    120,  "m"],
+		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 50, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
 		["FULL_PCT",     "Sim density for full thickness", 3, 40, 1, 10, "%"],
 		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
@@ -26,9 +26,9 @@
 	// Performance presets: how many clouds there are at once and per step.
 	// Moving one of these sliders yourself makes the preset "custom".
 	const PRESETS = {
-		performance: { MAX_ALIVE: 25, CLUSTER: 4 },
-		balanced:    { MAX_ALIVE: 41, CLUSTER: 8 },
-		quality:     { MAX_ALIVE: 80, CLUSTER: 8 },
+		performance: { MAX_ALIVE: 35, CLUSTER: 6 },
+		balanced:    { MAX_ALIVE: 60, CLUSTER: 8 },
+		quality:     { MAX_ALIVE: 100, CLUSTER: 10 },
 	};
 	const DEFAULT_PRESET = "balanced";
 	// Effect labels, filled in by build.py in the same order as kEffects.
@@ -42,7 +42,7 @@
 		["ENABLE",   "csEnable",  1],
 		["TEST",     "csTest",    0],
 		["BEAM",     "csBeam",    1],
-		["LIT",      "csLit",     0],
+		["LIT",      "csLit",     1],
 	];
 	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
 
@@ -77,6 +77,11 @@
 	if (settings.LEAD_MAX === 800) delete settings.LEAD_MAX;
 	// 25 % was the old density for full thickness; real decks rarely go over ~10 %.
 	if (settings.FULL_PCT === 25) delete settings.FULL_PCT;
+	// v4 defaults: lit by the sim's light, 120 x 50 m spread, dense and many.
+	if (!settings.__v4) {
+		["LIT", "LATERAL", "VERTICAL", "MULT", "MAX_ALIVE", "CLUSTER", "PRESET", "BRIGHT"].forEach(k => delete settings[k]);
+		settings.__v4 = true;
+	}
 	const save = () => {
 		const raw = JSON.stringify(settings);
 		try { if (typeof SetStoredData === "function") SetStoredData(STORE_KEY, raw); } catch (e) {}

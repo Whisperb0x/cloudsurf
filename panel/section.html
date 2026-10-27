@@ -43,13 +43,11 @@
                                         <li>Leaving a cloud: the clouds further ahead fade out at once (and the ones above or below you when you leave through the top or base); the last ones close by stay a second, then fade too</li>
                                         <li>Wing fade: small cloud flakes are laid out just ahead of the wings and stay where they are, so you fly through them and they stream over the wings; how many and how dense follow the cloud density, none outside cloud</li>
                                         <li>Some of the other clouds sweep over the wings and along the fuselage too, more in thin cloud</li>
-                                        <li>Clouds come out of the fog: they fade in within the visibility of the cloud you are in (further in thin cloud, closer in thick cloud), not lined up far ahead</li>
-                                        <li>Colour: not lit by the sun but set by CloudSurf, from the sun's elevation, how deep you are below the top of the deck and the density; Brightness matches it to the sim's cloud</li>
+                                        <li>Colour: a neutral light grey lit by the sim's own light, so the sim decides how dark the clouds are; Brightness matches them to the sim's cloud</li>
                                         <li>Size, heading and density differ per cloud; drifting with the wind; glow from your lights</li>
                                     </ul>
                                     <div class="cs-grid">
                                         <span>New clouds at</span><span id="csLeadNow" class="cs-val">-</span>
-                                        <span>Seen from</span><span id="csVis" class="cs-val">-</span>
                                         <span>Cloud brightness</span><span id="csTone" class="cs-val">-</span>
                                         <span>Density change</span><span id="csChange" class="cs-val">-</span>
                                         <span>Cloud layers</span><span id="csLayers" class="cs-val">-</span>
@@ -66,7 +64,7 @@
                                         <button class="cs-btn" id="csEffectNext">&gt;</button>
                                     </div>
                                     <div class="ctrl-master-toggle">
-                                        <p>Lit by the sun like smoke (the old look)</p>
+                                        <p>Lit by the sim's light (off = unlit, experimental)</p>
                                         <input type="checkbox" id="csLit" />
                                     </div>
                                     <div id="csSliders"></div>

@@ -262,8 +262,8 @@
         </VisualEffect.MultiplyOperation>
         <VisualEffect.Lerp InstanceId="{EDD6263F-BB91-5C35-9979-A4E8E95A86D6}">
             <OutputValue>{1404ED2F-117C-55CB-A4A9-C677ED205390}</OutputValue>
-            <xVariant>{00000000-0000-0000-0000-000000000000}, 0.750000</xVariant>
-            <yVariant>{00000000-0000-0000-0000-000000000000}, 0.250000</yVariant>
+            <xVariant>{00000000-0000-0000-0000-000000000000}, 0.900000</xVariant>
+            <yVariant>{00000000-0000-0000-0000-000000000000}, 0.850000</yVariant>
             <FXTime>{E1125A68-6597-5E9F-9E13-01BFFDFADDB8}, 0.000000</FXTime>
         </VisualEffect.Lerp>
         <VisualEffect.MultiplyOperation InstanceId="{F1348330-B0FA-53A1-8D99-98FCB353A162}">

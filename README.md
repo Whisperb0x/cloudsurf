@@ -36,20 +36,20 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Setting | Default | What it does |
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
-| Performance | Balanced | **Performance** 25 clouds at once, 4 per step; **Balanced** 41, 8 per step; **Quality** 80, 8 per step |
-| Clouds around you | 41 | how many clouds exist at once; moving it makes the preset "custom" |
-| Thickness | 1.5x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
+| Performance | Balanced | **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
+| Clouds around you | 60 | how many clouds exist at once; moving it makes the preset "custom" |
+| Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow (0 = off) |
 | Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
-Clouds come in random sizes and orientations and come out of the fog: they
-fade in within the visibility of the cloud you are in instead of being seen
-lined up far ahead. They are not lit by the sun like smoke: CloudSurf sets
-their brightness from the sun's elevation, how deep you are below the top of
-the deck and the density (Advanced has the old lit look as an option). The
+Clouds come in random sizes and orientations and come at you from far ahead,
+many of them, 120 m wide and 50 m high by default. They are a neutral light
+grey lit by the sim's own light, so the sim decides how dark they are; the
+Brightness slider matches them to the sim's cloud. (Advanced has an
+experimental unlit look.) The
 wing fade is a stream of small cloud flakes flying along with the aircraft,
 sent backwards over the wings in a 3 m tube, as many and as dense as the
 cloud you are in, with a slow gusty swing.
