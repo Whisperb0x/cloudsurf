@@ -9,15 +9,15 @@
 		["MULT",         "Thickness",             0,  2,   0.05, 1.5,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
-		["LEAD_MIN",     "Nearest cloud ahead",   20, 1500, 10,  800,  "m"],
-		["LEAD_MAX",     "Farthest cloud ahead",  50, 2000, 10,  1210, "m"],
+		["LEAD_MIN",     "Nearest cloud ahead",   20, 1500, 10,  500,  "m"],
+		["LEAD_MAX",     "Farthest cloud ahead",  50, 2000, 10,  800,  "m"],
 		["ENTRY_NEAR",   "Nearest cloud on entering", 20, 600, 10, 120, "m"],
-		["SPACING",      "Distance between clouds", 10, 200, 5,  35,   "m"],
-		["CLUSTER",      "Clouds per step",       1,  16,  1,    9,    ""],
+		["SPACING",      "Minimum distance between clouds", 5, 200, 5, 20, "m"],
+		["CLUSTER",      "Clouds per step",       1,  16,  1,    2,    ""],
 		["LATERAL",      "Sideways spread",       0,  150, 1,    80,   "m"],
 		["VERTICAL",     "Vertical spread",       0,  100, 1,    41,   "m"],
 		["HOLE",         "Clear zone around flight path", 0, 40, 1, 0, "m"],
-		["BEHIND",       "Remove after passing",  10, 500, 5,    150,  "m"],
+		["BEHIND",       "Remove after passing",  10, 500, 5,    100,  "m"],
 		["FULL_PCT",     "Sim density for full effect", 5, 80, 1, 25, "%"],
 		["MIN_PCT",      "Minimum sim density",   0,  5,   0.1,  0.3,  "%"],
 		["DENS_VAR",     "Density variation",     0,  1,   0.05, 0.25, ""],
@@ -38,9 +38,9 @@
 	// Performance presets: how many clouds there are at once and per step.
 	// Moving one of these sliders yourself makes the preset "custom".
 	const PRESETS = {
-		performance: { MAX_ALIVE: 25, CLUSTER: 5 },
-		balanced:    { MAX_ALIVE: 41, CLUSTER: 9 },
-		quality:     { MAX_ALIVE: 80, CLUSTER: 12 },
+		performance: { MAX_ALIVE: 25, CLUSTER: 1 },
+		balanced:    { MAX_ALIVE: 41, CLUSTER: 2 },
+		quality:     { MAX_ALIVE: 80, CLUSTER: 2 },
 	};
 	const DEFAULT_PRESET = "balanced";
 	// Effect labels, filled in by build.py in the same order as kEffects.
@@ -54,7 +54,7 @@
 		["ALT_FEET", "csAltFeet", 0],
 		["BEAM",     "csBeam",    1],
 	];
-	const STORE_KEY = "CloudSurfSettings1";
+	const STORE_KEY = "CloudSurfSettings2";  // v2: even spacing, new distance defaults
 
 	const $ = id => document.getElementById(id);
 	const getL = name => {
@@ -239,7 +239,7 @@
 			state = "in"; main = `In ${cloudWord(cloudPct)} cloud`;
 			sub = `${cloudPct.toFixed(0)} % density  ·  ${active} clouds around you`;
 		} else if (fade > 0.01 && active > 0) {
-			state = "fade"; main = "Leaving cloud"; sub = "Clouds are fading out";
+			state = "fade"; main = "Leaving cloud"; sub = "The last clouds are passing";
 		} else if ($("csTest").checked) {
 			state = "in"; main = "Test mode"; sub = `${active} test clouds  ·  also in clear sky`;
 		} else {
@@ -282,7 +282,7 @@
 		if (last.fails !== null && fails > last.fails)
 			log(`spawn FAILED (${fails} total) - try a smaller nearest distance`);
 		if (last.state !== null && state !== last.state)
-			log(state > 0.5 ? "cloud entered, spawning" : "left cloud, fading out");
+			log(state > 0.5 ? "cloud entered, spawning" : "left cloud, no new clouds");
 		last.spawns = spawns; last.fails = fails; last.state = state;
 	}
 

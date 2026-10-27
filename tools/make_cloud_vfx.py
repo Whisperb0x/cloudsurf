@@ -12,7 +12,7 @@ no rise, drift with the wind, and graph parameters CloudSurf sets per spawn:
   CloudShade    0..1 multiplies the colour: darker at dusk and night
   CloudAlpha    0..1 multiplies the opacity: fainter at night
   CloudFade     0..1 multiplies opacity and glow: all clouds fade out together
-                after leaving the sim's cloud
+                when CloudSurf is switched off
   LightX/Y/Z    aircraft position in the cloud's frame (x right, y up, z ahead)
   BeamX/Y/Z     landing light direction (unit vector) in that frame
   LandingGlow, StrobeGlow, WingGlow, BeaconGlow, NavRed, NavGreen
@@ -54,12 +54,13 @@ NAV_NEAR, NAV_REACH = 10.0, 45.0       # nav and wing lights
 GLOW_FLATTEN = 3.0                     # vertical distance counts this much more near the aircraft
 
 # The atlas variant uses our own material (MaterialLib, CloudPuff.material) with
-# a 4x4 atlas of cloud wisps; each particle picks a random cell. Its quads only
-# turn around the vertical axis (cylindrical billboards), so the wisps stay
-# level instead of rolling with the camera, and they get only a small tilt.
+# a 4x4 atlas of cloud wisps; each particle picks a random cell and gets only a
+# small tilt. They are a light accent next to the main clouds, so they are
+# much fainter. (Cylindrical billboards, which stay level, looked like flat cards.)
 ATLAS_MATERIAL = "{E10A36EB-4E91-4B0E-92DF-01130D2942B4}"
 ATLAS_CELLS = 4
 ATLAS_TILT = 0.25                      # rad, random tilt either way
+ATLAS_ALPHA = 0.4                      # opacity of the wisps relative to the main clouds
 ATLAS_RATE, ATLAS_SIZE = 2.5, 26.0     # more, smaller wisps overlap into more depth
 ATLAS_SPREAD_H, ATLAS_SPREAD_V = 18.0, 8.0
 
@@ -231,6 +232,8 @@ def build(name, atlas):
     dens1 = clamp("dens1", density, 0.0, 1.0, (-550, 0))
     alpha_d = lerp("alpha0", None, None, density, (-450, 100), xv=ALPHA_THIN, yv=ALPHA_DENSE)
     alpha_n = math_node("MultiplyOperation", "alphanight", alpha_d, calpha, (-350, 130))
+    if atlas:
+        alpha_n = math_node("MultiplyOperation", "alphawisp", alpha_n, None, (-330, 160), yv=ATLAS_ALPHA)
     alpha0 = clamp("alphamax", alpha_n, 0.0, 1.0, (-300, 100))
     fout_t = lerp("fadeoutt", None, None, age, (-450, 220), xv=1.0 / FADE_OUT, yv=0.0)
     fout = clamp("fadeout", fout_t, 0.0, 1.0, (-350, 240))
@@ -305,10 +308,7 @@ def build(name, atlas):
     tex = ""
     if atlas:
         cell = random("rcell", 0.0, ATLAS_CELLS * ATLAS_CELLS - 0.001, pid, 6, (-800, 100))
-        # same order as BlockParticleInit in the sim's Propdefs
-        tex = (f"            <ParticleQuadBillboardAxis>\n                <QuadBillboardAxis>{Z}, 0.000000, 1.000000, 0.000000</QuadBillboardAxis>\n"
-               "            </ParticleQuadBillboardAxis>\n"
-               f"            <ParticleTextureIndex>\n    {pin('FloatIn', cell, 0)}            </ParticleTextureIndex>\n")
+        tex = f"            <ParticleTextureIndex>\n    {pin('FloatIn', cell, 0)}            </ParticleTextureIndex>\n"
 
     node("VisualEffect", "effect",
          f"            <Name>{name}</Name>\n"
@@ -349,8 +349,7 @@ def build(name, atlas):
          f"            <ParticleSize>\n    {pin('FloatIn', upd_size, 0)}            </ParticleSize>\n", (300, 420))
     material = ""
     if atlas:
-        material = (f"            <QuadBillboardType>Cylindrical</QuadBillboardType>\n"
-                    f"            <Material>{ATLAS_MATERIAL}</Material>\n"
+        material = (f"            <Material>{ATLAS_MATERIAL}</Material>\n"
                     "            <UVMode>Atlas</UVMode>\n"
                     f"            <AtlasSize>{Z}, {f(ATLAS_CELLS)}, {f(ATLAS_CELLS)}</AtlasSize>\n")
     node("Output", "output",

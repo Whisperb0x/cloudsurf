@@ -110,14 +110,14 @@ struct ConfigVar { const char* name; double def; double Config::* field; };
 // defaults (the Balanced preset).
 const ConfigVar kConfigVars[] = {
 	{ "ENABLE",       1.0,   &Config::enable },       // 0 = off
-	{ "LEAD_MIN",     800.0, &Config::lead_min },     // m ahead, nearest spawn
-	{ "LEAD_MAX",     1210.0, &Config::lead_max },     // m ahead, farthest spawn
+	{ "LEAD_MIN",     500.0, &Config::lead_min },     // m ahead, nearest spawn
+	{ "LEAD_MAX",     800.0, &Config::lead_max },     // m ahead, farthest spawn
 	{ "ENTRY_NEAR",   120.0, &Config::entry_near },   // m ahead, nearest spawn when entering a cloud
-	{ "SPACING",      35.0,  &Config::spacing },      // m flown per new patch
+	{ "SPACING",      20.0,  &Config::spacing },      // m flown per spawn step, at least (see DensitySpacing)
 	{ "LATERAL",      80.0, &Config::lateral },      // m random offset sideways
 	{ "VERTICAL",     41.0,  &Config::vertical },     // m random offset up/down
 	{ "HOLE",         0.0,   &Config::hole },         // m kept clear around the flight path
-	{ "BEHIND",       150.0, &Config::behind },       // m behind before a patch is stopped
+	{ "BEHIND",       100.0, &Config::behind },       // m behind before a patch is stopped
 	{ "FULL_PCT",     25.0,  &Config::full_pct },     // sim cloud density (%) that gives the full effect
 	{ "MIN_PCT",      0.3,   &Config::min_pct },      // below this (%) no clouds are spawned
 	{ "MAX_ALIVE",    41.0,  &Config::max_alive },    // clouds alive at most (frame rate)
@@ -131,7 +131,7 @@ const ConfigVar kConfigVars[] = {
 	{ "MIX_LO",       0.3,   &Config::mix_lo },       // auto mix: only wisps below this density (0..1 curve)
 	{ "MIX_HI",       0.8,   &Config::mix_hi },       // auto mix: only big puffs above this
 	{ "DENS_VAR",     0.25,  &Config::dens_var },     // 0..1 random density spread per patch
-	{ "CLUSTER",      9.0,   &Config::cluster },      // patches per spawn step
+	{ "CLUSTER",      2.0,   &Config::cluster },      // patches per spawn step
 	{ "ALT_OFFSET",   0.0,   &Config::alt_offset },   // m added to every spawn altitude (calibration)
 	{ "TEST_INTERVAL", 1.0,  &Config::test_interval },// s between test spawns
 	{ "GLOW",         0.85,  &Config::glow },         // strength of light glow (read by the effect's RPN)
@@ -173,7 +173,8 @@ Puff g_puffs[kMaxPuffs];
 double g_smooth = 0.0;
 double g_mix = 0.0;  // cloud density for the auto mix, 0..1 before MULT
 double g_last_active = -100.0;
-double g_fade = 0.0;               // 0..1, written to L:CLOUDSURF_FADE
+double g_fade = 0.0;               // 0..1 in cloud, written to L:CLOUDSURF_FADE
+double g_show = 1.0;               // 0..1 clouds visible, written to L:CLOUDSURF_SHOW
 const double kExitHold = 0.7;      // s at full strength through a short "out of cloud"
 const double kFadeOutTime = 1.2;   // s to fade out after that
 const double kFadeInTime = 0.3;    // s to fade back in
@@ -313,16 +314,19 @@ int CurrentEffect() {
 	return i >= 0 && i < kSelectableEffects ? i : -1;
 }
 
-// Auto mix: wisps (CloudSurfWisps, kEffects[1]) in thin cloud, big puffs
-// (CloudSurf, kEffects[0]) in thick cloud, both in between. mix is the sim's
-// cloud density on the 0..1 curve, before MULT.
+// Style Full: the big clouds (CloudSurf, kEffects[0]) lead; light wisps
+// (CloudSurfWisps, kEffects[1]) are mixed in as an accent, at most kWispShare
+// of the clouds below MIX_LO and none above MIX_HI. mix is the sim's cloud
+// density on the 0..1 curve, before MULT.
+const double kWispShare = 0.35;
+
 int PickEffect(double mix) {
 	int fx = CurrentEffect();
 	if (fx >= 0) return fx;
 	if (kSelectableEffects < 2) return 0;
 	double span = fmax(0.05, g_cfg.mix_hi - g_cfg.mix_lo);
-	double puffs = fmin(1.0, fmax(0.0, (mix - g_cfg.mix_lo) / span));
-	return Rand01() < puffs ? 0 : 1;
+	double thick = fmin(1.0, fmax(0.0, (mix - g_cfg.mix_lo) / span));
+	return Rand01() < kWispShare * (1.0 - thick) ? 1 : 0;
 }
 
 double NearShare(double dens);
@@ -397,7 +401,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 		params[nparams++] = { "CloudSize", slot->size };
 		params[nparams++] = { "CloudShade", kShadeRpn };
 		params[nparams++] = { "CloudAlpha", kNightAlphaRpn };
-		params[nparams++] = { "CloudFade", "(L:CLOUDSURF_FADE, number)" };
+		params[nparams++] = { "CloudFade", "(L:CLOUDSURF_SHOW, number)" };
 		params[nparams++] = { "LandingGlow", kLandingRpn };
 		params[nparams++] = { "StrobeGlow", kStrobeRpn };
 		params[nparams++] = { "WingGlow", kWingRpn };
@@ -447,11 +451,16 @@ double CloudDens(const Aircraft& a, double dt) {
 	return fmin(2.0, g_mix * g_cfg.mult);
 }
 
-// Thin clouds get somewhat fewer clouds (spacing up to ~1.8x); they stay
-// light through the effect's density curve, not by leaving the sky empty.
+// Distance flown per spawn step. The MAX_ALIVE budget is spread evenly over
+// the stretch it has to cover (BEHIND behind us to LEAD_MAX ahead), so clouds
+// follow each other without gaps; SPACING is the minimum. Thinner cloud, as
+// towards its edge, gets fewer clouds (up to 2.5x the distance).
 double DensitySpacing(double dens) {
-	double spacing = g_cfg.spacing > 5.0 ? g_cfg.spacing : 5.0;
-	return spacing / (0.55 + 0.45 * fmin(1.0, dens));
+	double cluster = fmin(16.0, fmax(1.0, g_cfg.cluster));
+	double stretch = fmax(50.0, g_cfg.lead_max + g_cfg.behind);
+	double even = stretch * cluster / fmax(1.0, g_cfg.max_alive);
+	double spacing = fmax(fmax(5.0, g_cfg.spacing), even);
+	return spacing / (0.4 + 0.6 * fmin(1.0, dens));
 }
 
 // Share of clouds on the flight path and over the wings: most of them in thin
@@ -516,17 +525,22 @@ void Update() {
 	if (active) g_last_active = a.time;
 	bool hold = !active && g_cfg.enable > 0.5 && a.time - g_last_active < kExitHold;
 
-	// L:CLOUDSURF_FADE scales the opacity and glow of all clouds and the beam:
-	// once out of the cloud they fade out together instead of stopping, and
-	// fade back in if we enter again before they are gone.
+	// L:CLOUDSURF_FADE: being in cloud, smoothed; the landing light beam
+	// follows it. Leaving a cloud only stops new clouds: the ones already
+	// there stay until we have passed them, like the last bits of a real cloud.
 	if (active || hold) g_fade = fmin(1.0, g_fade + dt / kFadeInTime);
 	else g_fade = fmax(0.0, g_fade - dt / kFadeOutTime);
 	SetL("FADE", g_fade);
+	// L:CLOUDSURF_SHOW scales all clouds: they fade out only when CloudSurf
+	// is switched off, and are dropped once gone.
+	bool on = g_cfg.enable > 0.5;
+	g_show = on ? fmin(1.0, g_show + dt / kFadeInTime) : fmax(0.0, g_show - dt / kFadeOutTime);
+	SetL("SHOW", g_show);
 
-	// Retire patches behind us; once out and faded, drop everything.
-	// Test mode keeps them longer so they can be looked at after passing.
+	// Retire patches behind us. Test mode keeps them longer so they can be
+	// looked at after passing.
 	double behind = test ? fmax(g_cfg.behind, 500.0) : g_cfg.behind;
-	if (!active && !hold && g_fade <= 0.0) DestroyAll();
+	if (!on && g_show <= 0.0) DestroyAll();
 	int live = 0;
 	for (Puff& p : g_puffs) {
 		if (p.state == PUFF_LIVE) {

@@ -39,7 +39,8 @@ LEGACY_PACKAGES = ["whisperb0x-cloudpassvfx", "whisperb0x-cloudpass"]
 
 PANEL_ID = "PANEL_CLOUDSURF"
 PANEL_URL = "html_ui/InGamePanels/CloudSurf/CloudSurf.html"
-ICON_URL = "html_ui/icons/toolbar/ICON_TOOLBAR_CLOUDSURF.svg"
+# Only the name: the sim loads html_ui/icons/toolbar/<name>.svg itself.
+ICON_URL = "ICON_TOOLBAR_CLOUDSURF"
 PANEL_XML = f"""<?xml version="1.0" encoding="utf-8"?>
 <SimBase.Document Type="InGamePanels" version="1,0" id="InGamePanel_CloudSurf">
 	<Descr>CloudSurf toolbar panel</Descr>
