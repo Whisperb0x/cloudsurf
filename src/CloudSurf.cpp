@@ -175,6 +175,10 @@ double g_mix = 0.0;  // cloud density for the auto mix, 0..1 before MULT
 double g_last_active = -100.0;
 double g_fade = 0.0;               // 0..1 in cloud, written to L:CLOUDSURF_FADE
 double g_show = 1.0;               // 0..1 clouds visible, written to L:CLOUDSURF_SHOW
+double g_pct_fast = 0.0, g_pct_prev = 0.0, g_trend = 0.0;  // density change (DensityChange)
+double g_change = 0.0;             // 0..1, written to L:CLOUDSURF_CHANGE
+bool g_rising = false;
+double g_lead = 0.0;               // farthest spawn distance in use (shrinks on fast change)
 const double kExitHold = 0.7;      // s at full strength through a short "out of cloud"
 const double kFadeOutTime = 1.2;   // s to fade out after that
 const double kFadeInTime = 0.3;    // s to fade back in
@@ -451,6 +455,28 @@ double CloudDens(const Aircraft& a, double dt) {
 	return fmin(2.0, g_mix * g_cfg.mult);
 }
 
+// How fast the cloud density changes, as a stand-in for seeing what comes
+// next: inside a cloud the density hardly moves (relative change below
+// ~0.15/s in 99% of the logged frames), near an edge it changes fast (median
+// 0.33/s, often over 1/s). Returns 0 (steady) .. 1 (fast change), held for a
+// moment so a short swing still counts; *rising tells the direction.
+const double kChangeLo = 0.15, kChangeHi = 0.8;  // relative change per second
+const double kChangeHold = 0.5;                   // per second the reaction fades
+const double kLeadShrink = 0.6;                   // spawn distance at full change: 40% of LEAD_MAX
+
+double DensityChange(const Aircraft& a, double dt, bool* rising) {
+	g_pct_fast += (a.cloud_pct - g_pct_fast) * fmin(1.0, dt * 4.0);
+	double deriv = (g_pct_fast - g_pct_prev) / dt;
+	g_pct_prev = g_pct_fast;
+	g_trend += (deriv - g_trend) * fmin(1.0, dt * 3.0);
+	double rel = fabs(g_trend) / fmax(1.0, g_pct_fast);
+	double now = fmin(1.0, fmax(0.0, (rel - kChangeLo) / (kChangeHi - kChangeLo)));
+	if (now >= g_change) g_rising = g_trend > 0.0;
+	g_change = fmax(now, g_change - dt * kChangeHold);
+	*rising = g_rising;
+	return g_change;
+}
+
 // Distance flown per spawn step. The MAX_ALIVE budget is spread evenly over
 // the stretch it has to cover (BEHIND behind us to LEAD_MAX ahead), so clouds
 // follow each other without gaps; SPACING is the minimum. Thinner cloud, as
@@ -495,6 +521,8 @@ void Update() {
 	UpdateBeam();
 
 	double dens = CloudDens(a, dt);
+	bool rising = false;
+	double change = DensityChange(a, dt, &rising);
 	if (a.camera == 2.0) dens *= g_cfg.cockpit_mult;
 
 	// Switching effect: drop the old patches so the new look shows at once.
@@ -565,21 +593,37 @@ void Update() {
 		} else {
 			g_travel += a.speed * dt;
 			double spacing = DensitySpacing(dens);
+			// Density changing fast means we are near an edge: new clouds come
+			// closer (the cloud far ahead may already be different), more of
+			// them when it gets thicker, fewer when it thins out.
+			spacing *= rising ? 1.0 - 0.4 * change : 1.0 + 0.5 * change;
+			double lead_far = fmax(g_cfg.lead_max * (1.0 - kLeadShrink * change), g_cfg.entry_near + spacing);
+			double lead_near = fmin(g_cfg.lead_min, lead_far);
 			// First entry. The sim only reports the cloud we are in, not one
 			// ahead (density and AMBIENT IN CLOUD jump at the edge), so fill the
 			// whole space ahead at once: sparser from ENTRY_NEAR to LEAD_MIN so
 			// clouds pass right away, then the usual lead window.
 			if (live == 0 && a.time >= g_next_fill) {
-				for (double d = fmin(g_cfg.entry_near, g_cfg.lead_min); d < g_cfg.lead_min; d += spacing * 1.5)
+				for (double d = fmin(g_cfg.entry_near, lead_near); d < lead_near; d += spacing * 1.5)
 					SpawnStep(a, dens, d, spacing);
-				for (double d = g_cfg.lead_min; d <= g_cfg.lead_max; d += spacing)
+				for (double d = lead_near; d <= lead_far; d += spacing)
 					SpawnStep(a, dens, d, spacing);
+				g_lead = lead_far;
 				g_travel = 0.0;
 				g_next_fill = a.time + 1.0;  // don't retry every frame if spawns fail
 			}
+			// Once the density settles the spawn distance grows back; fill the
+			// stretch in between so there is no gap.
+			if (lead_far > g_lead + spacing) {
+				for (double d = g_lead + spacing; d <= lead_far; d += spacing)
+					SpawnStep(a, dens, d, spacing);
+				g_lead = lead_far;
+			} else if (lead_far < g_lead) {
+				g_lead = lead_far;
+			}
 			while (g_travel >= spacing) {
 				g_travel -= spacing;
-				double lead = g_cfg.lead_max - Rand01() * spacing;
+				double lead = lead_far - Rand01() * spacing;
 				SpawnStep(a, dens, lead, spacing);
 			}
 		}
@@ -594,6 +638,7 @@ void Update() {
 	SetL("SPAWNS", g_spawns);
 	SetL("LAST_LEAD", g_last_lead);
 	SetL("DENS", dens);
+	SetL("CHANGE", rising ? change : -change);
 	SetL("STATE", active ? 1.0 : 0.0);
 	SetL("HEARTBEAT", a.time);
 }

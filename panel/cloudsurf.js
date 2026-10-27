@@ -271,6 +271,9 @@
 		setText("csCloudPct", isNaN(cloudPct) ? "-" : cloudPct.toFixed(1) + " %");
 		setText("csDens", isNaN(dens) ? "-" : dens.toFixed(2));
 		setText("csFade", isNaN(fade) ? "-" : fade.toFixed(2));
+		const change = getL("CHANGE");
+		setText("csChange", isNaN(change) || change === 0 ? "steady" :
+		        (change > 0 ? "thicker " : "thinner ") + Math.abs(change).toFixed(2));
 		setText("csActive", isNaN(active) ? "-" : String(active));
 		setText("csSpawns", isNaN(spawns) ? "-" : String(spawns));
 		setText("csFails", isNaN(fails) ? "-" : String(fails), fails > 0 ? "cs-bad" : "");
