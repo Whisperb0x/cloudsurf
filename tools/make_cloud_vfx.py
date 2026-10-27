@@ -89,8 +89,7 @@ BEAM_GLOW = 3.0           # emissive at the nose at full Beam
 WING_LIFETIME = 1.6       # s: flakes are passed well before they go
 WING_CAPACITY = 240.0
 WING_SIZE = (4.0, 11.0)   # m, random per flake
-WING_SPREAD_V = 2.5       # m up/down around the wing
-WING_SPREAD_Z = 12.0      # m along the track
+WING_TUBE = 3.0           # m radius of the tube along the span, through the aircraft's middle
 WING_FADE_IN = 0.08       # share of the lifetime
 
 Z = "{00000000-0000-0000-0000-000000000000}"
@@ -447,12 +446,21 @@ def build_wing(name):
     src_size = attribute("srcsize", "Size", True, (-450, 520))
     pid = attribute("pid", "id", False, (-950, 300))
 
-    # anywhere across the wingspan, a little up/down, spread along the track
+    # anywhere across the wingspan, at random in a tube of WING_TUBE radius
+    # around it (uniform over the tube's cross-section: radius sqrt(random))
     rx = random("rx", -1.0, 1.0, pid, 1, (-800, -300))
     x = math_node("MultiplyOperation", "x", rx, half, (-650, -300))
-    ry = random("ry", -WING_SPREAD_V, WING_SPREAD_V, pid, 2, (-800, -220))
-    rz = random("rz", -WING_SPREAD_Z, WING_SPREAD_Z, pid, 3, (-800, -140))
-    start = vector3("startpos", [(x, 0), (ry, 0), (rz, 0)], (-500, -220))
+    ang = random("ang", 0.0, 6.283, pid, 2, (-900, -220))
+    rad = math_node("MultiplyOperation", "rad",
+                    math_node("PowOperation", "radsqrt", random("rr", 0.0, 1.0, pid, 3, (-900, -140)), None,
+                              (-800, -140), yv=0.5),
+                    None, (-700, -140), yv=WING_TUBE)
+    sin_a, cos_a = out("sina"), out("cosa")
+    node("Sin", "sina", f"            <OutputValue>{sin_a}</OutputValue>\n" + pin("x", ang, 0), (-800, -220))
+    node("Cos", "cosa", f"            <OutputValue>{cos_a}</OutputValue>\n" + pin("x", ang, 0), (-800, -180))
+    y = math_node("MultiplyOperation", "y", rad, sin_a, (-650, -220))
+    z = math_node("MultiplyOperation", "z", rad, cos_a, (-650, -140))
+    start = vector3("startpos", [(x, 0), (y, 0), (z, 0)], (-500, -220))
     rrot = random("rrot", 0.0, 6.283, pid, 4, (-800, -60))
     rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
     rsize = random("rsize", WING_SIZE[0], WING_SIZE[1], pid, 5, (-800, 20))
