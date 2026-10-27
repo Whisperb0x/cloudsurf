@@ -36,18 +36,18 @@ const int kEffectCount = sizeof(kEffects) / sizeof(kEffects[0]);
 // (BeamX/Y/Z) in its own frame (x right, y up, z along its spawn heading) as
 // RPN that the sim evaluates every frame; the effect then measures every
 // particle against them, so only the part of a cloud inside the beam or near
-// the aircraft lights up. The light strengths below are shared by all clouds:
-// Airbus-style double strobe, landing and wing lights in white, beacon pulse
-// in red, nav lights red on the left and green on the right, all scaled by
-// L:CLOUDSURF_GLOW. Distances and cone are constants in tools/make_cloud_vfx.py.
-const char* kStrobeRpn =
+// the aircraft lights up. Light strengths, all scaled by L:CLOUDSURF_GLOW:
+// landing lights (LandingGlow), and the lights on the aircraft, which share
+// one falloff: Airbus-style double strobe and wing lights in white
+// (NearWhite), beacon pulse and left nav light in red (NearRed), right nav
+// light in green (NearGreen). Distances and cone are in tools/make_cloud_vfx.py.
+const char* kNearWhiteRpn =
 	"(A:LIGHT STROBE, bool) (E:ABSOLUTE TIME, seconds) 1 % 0.06 < "
-	"(E:ABSOLUTE TIME, seconds) 1 % 0.14 > (E:ABSOLUTE TIME, seconds) 1 % 0.2 < and or and "
-	"4 * (L:CLOUDSURF_GLOW, number) *";
+	"(E:ABSOLUTE TIME, seconds) 1 % 0.14 > (E:ABSOLUTE TIME, seconds) 1 % 0.2 < and or and 4 * "
+	"(A:LIGHT WING, bool) 0.8 * + (L:CLOUDSURF_GLOW, number) *";
 const char* kBeaconRpn =
-	"(A:LIGHT BEACON, bool) (E:ABSOLUTE TIME, seconds) 1.2 % 0.15 < and 2.5 * (L:CLOUDSURF_GLOW, number) *";
+	"(A:LIGHT BEACON, bool) (E:ABSOLUTE TIME, seconds) 1.2 % 0.15 < and 2.5 *";
 const char* kLandingRpn = "(A:LIGHT LANDING, bool) 1.6 * (L:CLOUDSURF_GLOW, number) *";
-const char* kWingRpn = "(A:LIGHT WING, bool) 0.8 * (L:CLOUDSURF_GLOW, number) *";
 
 // Shade and opacity by time of day (E:TIME OF DAY: 0 dawn, 1 day, 2 dusk, 3 night).
 const char* kShadeRpn =
@@ -131,13 +131,13 @@ const ConfigVar kConfigVars[] = {
 	{ "MIX_LO",       0.3,   &Config::mix_lo },       // auto mix: only wisps below this density (0..1 curve)
 	{ "MIX_HI",       0.8,   &Config::mix_hi },       // auto mix: only big puffs above this
 	{ "DENS_VAR",     0.25,  &Config::dens_var },     // 0..1 random density spread per patch
-	{ "CLUSTER",      2.0,   &Config::cluster },      // patches per spawn step
+	{ "CLUSTER",      8.0,   &Config::cluster },      // patches per spawn step
 	{ "ALT_OFFSET",   0.0,   &Config::alt_offset },   // m added to every spawn altitude (calibration)
 	{ "TEST_INTERVAL", 1.0,  &Config::test_interval },// s between test spawns
 	{ "GLOW",         0.85,  &Config::glow },         // strength of light glow (read by the effect's RPN)
 	{ "SIZE",         1.65,  &Config::size },         // scale on cloud size (own effect)
-	{ "NEAR_SHARE",   0.0,   &Config::near_share },   // share of clouds that sweep over the wings
-	{ "NEAR_VERTICAL", 0.0,  &Config::near_vertical },// m up/down for those
+	{ "NEAR_SHARE",   0.35,  &Config::near_share },   // share of clouds that sweep over the wings
+	{ "NEAR_VERTICAL", 4.0,  &Config::near_vertical },// m up/down for those
 	{ "BEAM",         1.0,   &Config::beam },         // landing light beam effect on/off
 	{ "BEAM_FWD",     10.0,  &Config::beam_fwd },     // m ahead of the aircraft origin
 	{ "BEAM_UP",      -1.0,  &Config::beam_up },      // m above the aircraft origin
@@ -156,8 +156,8 @@ struct Puff {
 	char size[24];
 	char light[3][200];
 	char beam[3][300];
-	char nav_red[400];
-	char nav_green[400];
+	char near_red[500];
+	char near_green[400];
 };
 
 struct Aircraft {
@@ -407,7 +407,8 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 	// the wing and briefly fade it; the rest spreads wider and
 	// keeps out of a tube around the flight path.
 	double side = 0.0, up = 0.0;
-	if (Rand01() < NearShare(dens)) {
+	bool near = Rand01() < NearShare(dens);
+	if (near) {
 		double half_span = fmax(10.0, a.wingspan_m * 0.5);
 		side = (Rand01() * 2.0 - 1.0) * half_span;
 		up = (Rand01() * 2.0 - 1.0) * g_cfg.near_vertical;
@@ -430,21 +431,26 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 		if (slot->alt_m > l.top_m + kLayerMargin || slot->alt_m < l.bot_m - kLayerMargin) return false;
 	}
 
-	double heading = atan2(a.ve, a.vn) * kDeg;
-	if (heading < 0) heading += 360.0;
+	// Each cloud faces its own way (its spread is wider than high, so this
+	// varies the shapes that pass).
+	double heading = Rand01() * 360.0;
 
-	// Each patch gets its own density: thin wisps mixed with thicker ones.
+	// Each cloud gets its own density: thin ones mixed with thicker ones. The
+	// clouds over the wings are small and dense, so they briefly hide the wing.
 	double var = fmin(1.0, fmax(0.0, g_cfg.dens_var));
-	dens *= 1.0 - var * Rand01();
+	if (near) dens = fmin(2.0, fmax(dens, 0.6) * 1.5);
+	else dens *= 1.0 - var * Rand01();
 	const Effect& fx = kEffects[PickEffect(g_mix)];
-	FsVfxGraphParam params[18];
+	FsVfxGraphParam params[16];
 	int nparams = 0;
 	if (fx.kind == FX_CLOUDSURF) {
 		// Above 1 the effect only gets more opaque (MULT above 1x).
 		snprintf(slot->dens, sizeof(slot->dens), "%.4f", fmin(2.0, fmax(0.0, dens)));
-		// Mostly medium clouds with the odd big one: 0.5..2.2, skewed low.
+		// Small to big with most of them medium-small: 0.35..2.4 (over the
+		// wings 0.3..0.6), times SIZE.
 		double r = Rand01();
-		snprintf(slot->size, sizeof(slot->size), "%.4f", (0.5 + 1.7 * r * r) * g_cfg.size);
+		double size = near ? 0.3 + 0.3 * r : 0.35 + 2.05 * pow(r, 1.6);
+		snprintf(slot->size, sizeof(slot->size), "%.4f", size * g_cfg.size);
 		static const char* kLightNames[3] = { "LightX", "LightY", "LightZ" };
 		static const char* kBeamNames[3] = { "BeamX", "BeamY", "BeamZ" };
 		for (int i = 0; i < 3; ++i) {
@@ -455,9 +461,9 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 		}
 		char side[300];
 		SideRpn(side, sizeof(side), slot->lat, slot->lon);
-		snprintf(slot->nav_red, sizeof(slot->nav_red),
-		         "(A:LIGHT NAV, bool) 1.2 * %s 0 < * (L:CLOUDSURF_GLOW, number) *", side);
-		snprintf(slot->nav_green, sizeof(slot->nav_green),
+		snprintf(slot->near_red, sizeof(slot->near_red),
+		         "%s (A:LIGHT NAV, bool) 1.2 * %s 0 < * + (L:CLOUDSURF_GLOW, number) *", kBeaconRpn, side);
+		snprintf(slot->near_green, sizeof(slot->near_green),
 		         "(A:LIGHT NAV, bool) 1.2 * %s 0 > * (L:CLOUDSURF_GLOW, number) *", side);
 		params[nparams++] = { "CloudDensity", slot->dens };
 		params[nparams++] = { "CloudSize", slot->size };
@@ -465,16 +471,14 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 		params[nparams++] = { "CloudAlpha", kNightAlphaRpn };
 		params[nparams++] = { "CloudFade", "(L:CLOUDSURF_SHOW, number)" };
 		params[nparams++] = { "LandingGlow", kLandingRpn };
-		params[nparams++] = { "StrobeGlow", kStrobeRpn };
-		params[nparams++] = { "WingGlow", kWingRpn };
-		params[nparams++] = { "BeaconGlow", kBeaconRpn };
-		params[nparams++] = { "NavRed", slot->nav_red };
-		params[nparams++] = { "NavGreen", slot->nav_green };
+		params[nparams++] = { "NearWhite", kNearWhiteRpn };
+		params[nparams++] = { "NearRed", slot->near_red };
+		params[nparams++] = { "NearGreen", slot->near_green };
 	}
 
 	FsVec3d lla = { slot->lat, slot->lon,
 	                g_cfg.alt_feet > 0.5 ? slot->alt_m / kFtToM : slot->alt_m };
-	// Level, along the flight direction: the effect's light frame relies on it.
+	// Level, turned to the cloud's heading: the effect's light frame relies on it.
 	FsVec3d pbh = { 0.0, 0.0, heading };
 	FsVfxId id = nparams ? fsVfxSpawnInWorld(fx.guid, lla, pbh, -1.f, params, nparams)
 	                     : fsVfxSpawnInWorld(fx.guid, lla, pbh, -1.f);

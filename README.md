@@ -32,20 +32,23 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Setting | Default | What it does |
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
-| Cloud style | Classic | **Full**: small wisps in thin cloud, big soft clouds in thick cloud, both in between. **Classic**: only the big soft clouds |
-| Performance | Balanced | **Performance** 25 clouds at once, **Balanced** 41, **Quality** 80 |
+| Performance | Balanced | **Performance** 25 clouds at once, 4 per step; **Balanced** 41, 8 per step; **Quality** 80, 8 per step |
 | Clouds around you | 41 | how many clouds exist at once; moving it makes the preset "custom" |
 | Thickness | 1.5x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow (0 = off) |
 | Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
-**Advanced and debug tools** has the rest: effect choice (also wisps only),
+Clouds come in random sizes and orientations; about a third are small, dense
+clouds that sweep over the wings and briefly hide them (wing fade).
+
+**Advanced and debug tools** has the rest: cloud style (Classic, or the
+experimental wisps made from cloud photo textures, mixed in or alone),
 test mode (spawns in clear sky), spawn and clear buttons, live values, a log,
 and settings for distance ahead (800–1210 m, from 120 m when entering a cloud),
 spacing, clouds per step, spread, share over the wings, clear zone around the
 flight path, density mapping (cloud density for full effect 25 %, minimum
-0.3 %), the Full style mix, and beam position and direction.
+0.3 %), the wisps mix, and beam position and direction.
 All settings are `L:CLOUDSURF_*` variables, so other tools (MobiFlight,
 SPAD.neXt, …) can drive them too. See `kConfigVars` in `src/CloudSurf.cpp`.
 

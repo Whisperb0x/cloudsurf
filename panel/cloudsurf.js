@@ -13,7 +13,7 @@
 		["LEAD_MAX",     "Farthest cloud ahead",  50, 2000, 10,  800,  "m"],
 		["ENTRY_NEAR",   "Nearest cloud on entering", 20, 600, 10, 120, "m"],
 		["SPACING",      "Minimum distance between clouds", 5, 200, 5, 20, "m"],
-		["CLUSTER",      "Clouds per step",       1,  16,  1,    2,    ""],
+		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
 		["LATERAL",      "Sideways spread",       0,  150, 1,    80,   "m"],
 		["VERTICAL",     "Vertical spread",       0,  100, 1,    41,   "m"],
 		["HOLE",         "Clear zone around flight path", 0, 40, 1, 0, "m"],
@@ -28,8 +28,8 @@
 		["TEST_DENS",    "Test density",          0,  1,   0.05, 1.0,  ""],
 		["TEST_INTERVAL", "Test spawn interval",  0.2, 5,  0.1,  1.0,  "s"],
 		["ALT_OFFSET",   "Altitude offset",       -300, 300, 5,  0,    "m"],
-		["NEAR_SHARE",   "Share over the wings",  0,  1,   0.05, 0,    ""],
-		["NEAR_VERTICAL", "Over-wing height spread", 0, 30, 1,   0,    "m"],
+		["NEAR_SHARE",   "Share over the wings",  0,  1,   0.05, 0.35, ""],
+		["NEAR_VERTICAL", "Over-wing height spread", 0, 30, 1,   4,    "m"],
 		["BEAM_FWD",     "Beam start ahead",      -10, 60, 1,   10,   "m"],
 		["BEAM_UP",      "Beam start height",     -10, 10, 0.5, -1,   "m"],
 		["BEAM_HDG",     "Beam direction (heading)", -180, 180, 1, 1, "deg"],
@@ -38,23 +38,25 @@
 	// Performance presets: how many clouds there are at once and per step.
 	// Moving one of these sliders yourself makes the preset "custom".
 	const PRESETS = {
-		performance: { MAX_ALIVE: 25, CLUSTER: 1 },
-		balanced:    { MAX_ALIVE: 41, CLUSTER: 2 },
-		quality:     { MAX_ALIVE: 80, CLUSTER: 2 },
+		performance: { MAX_ALIVE: 25, CLUSTER: 4 },
+		balanced:    { MAX_ALIVE: 41, CLUSTER: 8 },
+		quality:     { MAX_ALIVE: 80, CLUSTER: 8 },
 	};
 	const DEFAULT_PRESET = "balanced";
 	// Effect labels, filled in by build.py in the same order as kEffects.
 	// L:CLOUDSURF_EFFECT is an index into it, or -1 for the mix (style Full).
 	const EFFECTS = /*@EFFECTS@*/[];
 	const DEFAULT_EFFECT = 0;
-	const effectLabel = i => (i < 0 ? "Full (mix)" : EFFECTS[i] || "?");
+	// The custom-texture wisps are experimental: only here, not on the main page.
+	const EFFECT_LABELS = { CloudSurf: "Classic", CloudSurfWisps: "Wisps only (experimental)" };
+	const effectLabel = i => (i < 0 ? "Classic + wisps (experimental)" : EFFECT_LABELS[EFFECTS[i]] || EFFECTS[i] || "?");
 	const TOGGLES = [
 		["ENABLE",   "csEnable",  1],
 		["TEST",     "csTest",    0],
 		["ALT_FEET", "csAltFeet", 0],
 		["BEAM",     "csBeam",    1],
 	];
-	const STORE_KEY = "CloudSurfSettings2";  // v2: even spacing, new distance defaults
+	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
 
 	const $ = id => document.getElementById(id);
 	const getL = name => {
@@ -153,8 +155,6 @@
 
 	function showChoices() {
 		const effect = valueOf("EFFECT"), preset = valueOf("PRESET");
-		document.querySelectorAll("#csStyle .cs-seg-btn").forEach(b =>
-			setOn(b, Number(b.getAttribute("data-effect")) === effect));
 		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
 			setOn(b, b.getAttribute("data-preset") === preset));
 		$("csEffectName").textContent = `${effect + 2}/${EFFECTS.length + 1}  ${effectLabel(effect)}`;
@@ -354,8 +354,6 @@
 		$("csShowDebug").addEventListener("change", () => {
 			$("csDebug").style.display = $("csShowDebug").checked ? "block" : "none";
 		});
-		document.querySelectorAll("#csStyle .cs-seg-btn").forEach(b =>
-			b.addEventListener("click", () => setEffect(Number(b.getAttribute("data-effect")))));
 		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
 			b.addEventListener("click", () => setPreset(b.getAttribute("data-preset"))));
 		$("csEffectPrev").addEventListener("click", () => stepEffect(-1));

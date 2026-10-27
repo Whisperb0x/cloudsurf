@@ -15,8 +15,10 @@ no rise, drift with the wind, and graph parameters CloudSurf sets per spawn:
                 when CloudSurf is switched off
   LightX/Y/Z    aircraft position in the cloud's frame (x right, y up, z ahead)
   BeamX/Y/Z     landing light direction (unit vector) in that frame
-  LandingGlow, StrobeGlow, WingGlow, BeaconGlow, NavRed, NavGreen
-                light strengths (0 when off)
+  LandingGlow   landing light strength (0 when off)
+  NearWhite, NearRed, NearGreen
+                strength of the lights on the aircraft (strobes and wing
+                lights; beacon and left nav light; right nav light)
 
 Every particle measures itself against the light: the landing light only
 lights particles inside its cone and fades with distance; strobes, beacon,
@@ -40,17 +42,18 @@ GREY_THIN, GREY_DENSE = 0.75, 0.25     # colour at density 0 / 1 (before CloudSh
 WIND_FACTOR = 1.0     # 1 = particles move with the wind
 SPREAD_H, SPREAD_V = 12.0, 5.0         # m random start position per particle (flat cloud)
 SIZE_VAR = (0.6, 1.4)                  # random size factor per particle
-FADE_IN = 0.04                         # share of the lifetime used to fade in
-# A new cloud starts with a burst so it is there at once: extra particles per
-# second right after spawning, tapering off over START_TIME seconds.
-START_RATE, START_TIME = 12.0, 0.5
+FADE_IN = 0.05                         # share of the lifetime used to fade in
+# A new cloud appears rather than grows: a burst of particles right after
+# spawning (extra per second, tapering off over START_TIME seconds), each
+# starting at GROW_START of its size and only growing a little after that.
+START_RATE, START_TIME = 25.0, 0.4
+GROW_START = 0.7
 FADE_OUT = 0.4                         # share of the lifetime used to fade out
 GLOW_GAIN = 6.0                        # emissive per unit of light strength
 # Light falloff 1 / (1 + (d/near)^2), reaching zero at `reach` (metres).
 LANDING_NEAR, LANDING_REACH = 250.0, 600.0
 LANDING_CONE = 12.0                    # degrees, half angle where the landing light ends
-STROBE_NEAR, STROBE_REACH = 15.0, 60.0
-NAV_NEAR, NAV_REACH = 10.0, 45.0       # nav and wing lights
+NEAR_NEAR, NEAR_REACH = 12.0, 50.0     # strobes, beacon, nav and wing lights
 GLOW_FLATTEN = 3.0                     # vertical distance counts this much more near the aircraft
 
 # The atlas variant uses our own material (MaterialLib, CloudPuff.material) with
@@ -195,11 +198,9 @@ def build(name, atlas):
     beam_dir = vector3("beamdir", [(param(n, 0.0, (-1100, 950 + 80 * i)), 0)
                                    for i, n in enumerate(("BeamX", "BeamY", "BeamZ"))], (-950, 1000))
     landing = param("LandingGlow", 0.0, (-700, 1200))
-    strobe = param("StrobeGlow", 0.0, (-700, 1280))
-    wing = param("WingGlow", 0.0, (-700, 1360))
-    beacon = param("BeaconGlow", 0.0, (-700, 1440))
-    nav_r = param("NavRed", 0.0, (-700, 1520))
-    nav_g = param("NavGreen", 0.0, (-700, 1600))
+    near_w = param("NearWhite", 0.0, (-700, 1280))   # strobes, wing lights
+    near_r = param("NearRed", 0.0, (-700, 1360))     # beacon, left nav light
+    near_g = param("NearGreen", 0.0, (-700, 1440))   # right nav light
 
     # per particle age 0..1, source size, and an id that seeds its randoms
     age = attribute("age", "AgeOverLifetime", False, (-450, 400))
@@ -211,7 +212,9 @@ def build(name, atlas):
     rx = random("rx", -spread_h, spread_h, pid, 1, (-800, -300))
     ry = random("ry", -spread_v, spread_v, pid, 2, (-800, -220))
     rz = random("rz", -spread_h, spread_h, pid, 3, (-800, -140))
-    start = vector3("startpos", [(rx, 0), (ry, 0), (rz, 0)], (-600, -220))
+    # the spread grows with CloudSize too, so big clouds are big all over
+    start_1 = vector3("startpos", [(rx, 0), (ry, 0), (rz, 0)], (-600, -220))
+    start = math_node("MultiplyOperation", "startscaled", start_1, csize, (-500, -220))
     rrot = random("rrot", -ATLAS_TILT if atlas else 0.0, ATLAS_TILT if atlas else 6.283, pid, 4, (-800, -60))
     rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
     rsize = random("rsize", SIZE_VAR[0], SIZE_VAR[1], pid, 5, (-800, 20))
@@ -219,7 +222,8 @@ def build(name, atlas):
     base_size = math_node("MultiplyOperation", "initsize", csize, None, (-450, 250),
                           yv=ATLAS_SIZE if atlas else SIZE)
     init_size = math_node("MultiplyOperation", "initsizevar", base_size, rsize, (-350, 250))
-    grow = math_node("PowOperation", "grow", age, None, (-250, 400), yv=0.5)
+    grow_t = math_node("PowOperation", "grow", age, None, (-250, 400), yv=0.5)
+    grow = lerp("growf", None, None, grow_t, (-150, 400), xv=GROW_START, yv=1.0)
     upd_size = math_node("MultiplyOperation", "updsize", grow, src_size, (-50, 450))
 
     wind = out("wind")
@@ -285,17 +289,12 @@ def build(name, atlas):
     land_k = math_node("MultiplyOperation", "landk", cone, fall_l, (650, 1420))
     land = math_node("MultiplyOperation", "land", land_k, landing, (750, 1420))
 
-    fall_s = falloff("strobe", dd_flat, dist_flat, STROBE_NEAR, STROBE_REACH, 1540)
-    fall_n = falloff("nav", dd_flat, dist_flat, NAV_NEAR, NAV_REACH, 1660)
-    white_s = math_node("MultiplyOperation", "whites", strobe, fall_s, (650, 1540))
-    white_n = math_node("MultiplyOperation", "whiten", wing, fall_n, (650, 1660))
-    white = math_node("AddOperation", "white",
-                      math_node("AddOperation", "white0", land, white_s, (750, 1540)), white_n, (850, 1600))
-    red_b = math_node("MultiplyOperation", "redb", beacon, fall_s, (650, 1780))
-    red_n = math_node("MultiplyOperation", "redn", nav_r, fall_n, (650, 1840))
-    red = math_node("AddOperation", "red",
-                    math_node("AddOperation", "red0", red_b, red_n, (750, 1800)), white, (850, 1800))
-    green_n = math_node("MultiplyOperation", "greenn", nav_g, fall_n, (650, 1900))
+    fall_n = falloff("near", dd_flat, dist_flat, NEAR_NEAR, NEAR_REACH, 1540)
+    white_n = math_node("MultiplyOperation", "whiten", near_w, fall_n, (650, 1540))
+    white = math_node("AddOperation", "white", land, white_n, (850, 1600))
+    red_n = math_node("MultiplyOperation", "redn", near_r, fall_n, (650, 1800))
+    red = math_node("AddOperation", "red", red_n, white, (850, 1800))
+    green_n = math_node("MultiplyOperation", "greenn", near_g, fall_n, (650, 1900))
     green = math_node("AddOperation", "green", green_n, white, (850, 1900))
 
     # emissive: white plus red (beacon, left nav) and green (right nav)
