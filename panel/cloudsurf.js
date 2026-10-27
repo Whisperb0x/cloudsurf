@@ -204,6 +204,55 @@
 		log("settings reset to defaults");
 	}
 
+	// --- cloud layers -------------------------------------------------------
+	// The sim's own weather panel API (JS_LISTENER_WEATHER; internal, not an
+	// official SDK API) gives the active weather's cloud layers. They go to the
+	// module as L:CLOUDSURF_LAYERS (count, 0 = unknown), LAYER<n>_BOT/_TOP
+	// (feet), _COV (0..1), _DENS and LAYERS_AGL. Without it CloudSurf still
+	// works, only without knowing the layers.
+
+	let layers = [], layersAgl = false;
+
+	function coverWord(c) {
+		return c < 0.15 ? "few" : c < 0.5 ? "scattered" : c < 0.85 ? "broken" : "overcast";
+	}
+	const feet = v => String(Math.round(v / 100) * 100).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+	function layersText() {
+		if (!layers.length) return "";
+		return layers.map(l => `${feet(l.bot)}-${feet(l.top)} ft ${coverWord(l.cov)}`).join("  ·  ") +
+		       (layersAgl ? " (above ground)" : "");
+	}
+
+	function writeLayers(data) {
+		const value = (l, key) => (l && l[key] ? Number(l[key].value) || 0 : 0);
+		layers = ((data && data.tCloudLayers) || [])
+			.map(l => ({ bot: value(l, "dvAltitudeBot"), top: value(l, "dvAltitudeTop"),
+			             cov: value(l, "dvCoverageRatio") / 100, dens: value(l, "dvDensityMultiplier") }))
+			.filter(l => l.top > l.bot && l.cov > 0);
+		layersAgl = !!(data && data.oSettings && data.oSettings.bIsAltitudeAMGL);
+		layers.forEach((l, i) => {
+			setL(`LAYER${i + 1}_BOT`, l.bot);
+			setL(`LAYER${i + 1}_TOP`, l.top);
+			setL(`LAYER${i + 1}_COV`, l.cov);
+			setL(`LAYER${i + 1}_DENS`, l.dens);
+		});
+		setL("LAYERS_AGL", layersAgl ? 1 : 0);
+		setL("LAYERS", layers.length);
+	}
+
+	function startLayers() {
+		if (typeof RegisterViewListener !== "function") return;
+		try {
+			let listener = null;
+			const ask = () => { try { if (listener) listener.trigger("ASK_UPDATE_PRESET"); } catch (e) {} };
+			listener = RegisterViewListener("JS_LISTENER_WEATHER", ask);
+			listener.on("UpdatePreset", writeLayers);
+			setInterval(ask, 10000);  // the weather can change in flight
+		} catch (e) {
+			log("cloud layers not available");
+		}
+	}
+
 	// --- status and debugger ------------------------------------------------
 
 	const logLines = [];
@@ -238,12 +287,16 @@
 		} else if (inCloud > 0.5) {
 			state = "in"; main = `In ${cloudWord(cloudPct)} cloud`;
 			sub = `${cloudPct.toFixed(0)} % density  ·  ${active} clouds around you`;
+		} else if (getL("EARLY") > 0.5) {
+			state = "in"; main = "Entering a cloud layer";
+			sub = `Clouds placed ahead  ·  ${layersText()}`;
 		} else if (fade > 0.01 && active > 0) {
 			state = "fade"; main = "Leaving cloud"; sub = "The last clouds are passing";
 		} else if ($("csTest").checked) {
 			state = "in"; main = "Test mode"; sub = `${active} test clouds  ·  also in clear sky`;
 		} else {
-			state = "clear"; main = "Clear air"; sub = "Clouds start as soon as you fly into one";
+			state = "clear"; main = "Clear air";
+			sub = layers.length ? "Cloud layers: " + layersText() : "Clouds start as soon as you fly into one";
 		}
 		$("csStatus").className = "cs-status cs-" + state;
 		$("csStatusMain").textContent = main;
@@ -271,6 +324,8 @@
 		setText("csCloudPct", isNaN(cloudPct) ? "-" : cloudPct.toFixed(1) + " %");
 		setText("csDens", isNaN(dens) ? "-" : dens.toFixed(2));
 		setText("csFade", isNaN(fade) ? "-" : fade.toFixed(2));
+		const layerNow = getL("LAYER");
+		setText("csLayers", layers.length ? `${layers.length}, in #${layerNow || "-"}` : "unknown");
 		const change = getL("CHANGE");
 		setText("csChange", isNaN(change) || change === 0 ? "steady" :
 		        (change > 0 ? "thicker " : "thinner ") + Math.abs(change).toFixed(2));
@@ -295,6 +350,7 @@
 		bindToggles();
 		showChoices();
 		applyAll();
+		startLayers();
 		$("csShowDebug").addEventListener("change", () => {
 			$("csDebug").style.display = $("csShowDebug").checked ? "block" : "none";
 		});

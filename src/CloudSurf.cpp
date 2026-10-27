@@ -166,13 +166,27 @@ struct Aircraft {
 	double speed;
 	double in_cloud, cloud_pct, camera, time;
 	double wingspan_m;
+	double ground_m;    // ground elevation below the aircraft
 };
+
+// Cloud layers of the active weather, written by the panel from the sim's own
+// weather API (see LAYERS in panel/cloudsurf.js). Only the height band of each
+// layer is known, not where in it the clouds are.
+struct Layer { double bot_m, top_m, cov, dens; };
+const int kMaxLayers = 3;
+Layer g_layers[kMaxLayers];
+int g_layer_count = 0;
+int g_layer_now = -1;              // layer the aircraft is in or about to enter
+const double kLayerMargin = 30.0;  // m clouds may stick out of their layer
+const double kPreCoverage = 0.6;   // start early only into layers at least this covered
+double g_last_mix = 0.6;           // density curve value of the last cloud, for early starts
 
 Config g_cfg;
 Puff g_puffs[kMaxPuffs];
 double g_smooth = 0.0;
 double g_mix = 0.0;  // cloud density for the auto mix, 0..1 before MULT
 double g_last_active = -100.0;
+double g_last_cloudy = -100.0;     // last time really in cloud (or test), for the beam
 double g_fade = 0.0;               // 0..1 in cloud, written to L:CLOUDSURF_FADE
 double g_show = 1.0;               // 0..1 clouds visible, written to L:CLOUDSURF_SHOW
 double g_pct_fast = 0.0, g_pct_prev = 0.0, g_trend = 0.0;  // density change (DensityChange)
@@ -240,6 +254,44 @@ void ReadAircraft(Aircraft& a) {
 	a.camera = Calc("(A:CAMERA STATE, enum)");
 	a.time = Calc("(E:SIMULATION TIME, seconds)");
 	a.wingspan_m = Calc("(A:WING SPAN, feet)") * kFtToM;
+	a.ground_m = Calc("(A:GROUND ALTITUDE, meters)");
+}
+
+// L:CLOUDSURF_LAYERS = number of layers (0 = unknown), LAYER<n>_BOT/_TOP in
+// feet, above ground when L:CLOUDSURF_LAYERS_AGL is 1, _COV and _DENS.
+void ReadLayers(const Aircraft& a) {
+	g_layer_count = 0;
+	int n = (int)GetL("LAYERS");
+	double base = GetL("LAYERS_AGL") > 0.5 ? a.ground_m : 0.0;
+	for (int i = 0; i < n && i < kMaxLayers; ++i) {
+		char name[32];
+		Layer l;
+		snprintf(name, sizeof(name), "LAYER%d_BOT", i + 1); l.bot_m = GetL(name) * kFtToM + base;
+		snprintf(name, sizeof(name), "LAYER%d_TOP", i + 1); l.top_m = GetL(name) * kFtToM + base;
+		snprintf(name, sizeof(name), "LAYER%d_COV", i + 1); l.cov = GetL(name);
+		snprintf(name, sizeof(name), "LAYER%d_DENS", i + 1); l.dens = GetL(name);
+		if (l.top_m > l.bot_m && l.cov > 0.0) g_layers[g_layer_count++] = l;
+	}
+}
+
+int LayerAt(double alt_m) {
+	for (int i = 0; i < g_layer_count; ++i)
+		if (alt_m >= g_layers[i].bot_m - kLayerMargin && alt_m <= g_layers[i].top_m + kLayerMargin) return i;
+	return -1;
+}
+
+// Climbing or descending towards a well covered layer that the flight path
+// enters within `reach` metres: returns that layer, or -1.
+int LayerAhead(const Aircraft& a, double reach) {
+	if (a.speed < 1.0 || fabs(a.vu) < 1.0) return -1;
+	double alt_then = a.alt_m + a.vu * reach / a.speed;
+	for (int i = 0; i < g_layer_count; ++i) {
+		const Layer& l = g_layers[i];
+		if (l.cov < kPreCoverage) continue;
+		if (a.vu > 0 && a.alt_m < l.bot_m && alt_then >= l.bot_m) return i;
+		if (a.vu < 0 && a.alt_m > l.top_m && alt_then <= l.top_m) return i;
+	}
+	return -1;
 }
 
 // Offset in metres (east, north, up) from the aircraft to a world position.
@@ -371,6 +423,12 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead) {
 	double n = fn * lead + rn * side;
 	double u = fu * lead + up + g_cfg.alt_offset;
 	OffsetToWorld(a, e, n, u, slot->lat, slot->lon, slot->alt_m);
+	// Keep clouds inside the layer we fly in: none in the clear air above or
+	// below it when the flight path leaves the layer.
+	if (g_layer_now >= 0) {
+		const Layer& l = g_layers[g_layer_now];
+		if (slot->alt_m > l.top_m + kLayerMargin || slot->alt_m < l.bot_m - kLayerMargin) return false;
+	}
 
 	double heading = atan2(a.ve, a.vn) * kDeg;
 	if (heading < 0) heading += 360.0;
@@ -546,8 +604,26 @@ void Update() {
 		else ++g_fails;  // needs a flight direction
 	}
 	bool test = g_cfg.test > 0.5;
+	bool in_cloud = a.in_cloud > 0.5 && dens > 0.0;
+
+	// Cloud layers: the one we fly in, or the one a climb or descent is about
+	// to enter (well covered layers only; in a scattered layer a gap is as
+	// likely as a cloud). Entering early uses the density of the last cloud.
+	ReadLayers(a);
+	g_layer_now = test ? -1 : LayerAt(a.alt_m);
+	int ahead = -1;
+	if (!test && !in_cloud && g_layer_now < 0) ahead = LayerAhead(a, g_cfg.lead_max);
+	if (ahead >= 0) {
+		g_layer_now = ahead;
+		g_mix = g_last_mix;
+		dens = fmin(2.0, g_last_mix * g_cfg.mult) * (a.camera == 2.0 ? g_cfg.cockpit_mult : 1.0);
+	}
+	if (in_cloud) g_last_mix = g_mix;
+	SetL("LAYER", g_layer_now + 1);
+	SetL("EARLY", ahead >= 0 ? 1.0 : 0.0);
+
 	bool active = g_cfg.enable > 0.5 && a.speed >= g_cfg.min_speed &&
-	              (test || (a.in_cloud > 0.5 && dens > 0.0));
+	              (test || in_cloud || ahead >= 0);
 	// Inside a cloud the sim sometimes reports "out" for half a second; keep
 	// the clouds ahead through such gaps instead of dropping and refilling.
 	if (active) g_last_active = a.time;
@@ -556,7 +632,8 @@ void Update() {
 	// L:CLOUDSURF_FADE: being in cloud, smoothed; the landing light beam
 	// follows it. Leaving a cloud only stops new clouds: the ones already
 	// there stay until we have passed them, like the last bits of a real cloud.
-	if (active || hold) g_fade = fmin(1.0, g_fade + dt / kFadeInTime);
+	if (test || in_cloud) g_last_cloudy = a.time;
+	if (a.time - g_last_cloudy < kExitHold) g_fade = fmin(1.0, g_fade + dt / kFadeInTime);
 	else g_fade = fmax(0.0, g_fade - dt / kFadeOutTime);
 	SetL("FADE", g_fade);
 	// L:CLOUDSURF_SHOW scales all clouds: they fade out only when CloudSurf
