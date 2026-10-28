@@ -139,7 +139,6 @@ const double kMinSpacing = 15.0;     // m flown per spawn step, at least
 const double kBehind = 100.0;        // m behind us a cloud is removed
 const double kDensVar = 0.25;        // random thinning per cloud
 const double kCockpitMult = 0.95;    // thickness in cockpit view
-const double kNearVertical = 4.0;    // m up/down for the clouds over the wings
 const double kMixLo = 0.3, kMixHi = 0.8;  // Classic + wisps: wisps only in thin cloud
 const double kTestInterval = 1.0;    // s between test clouds
 // Each cloud fades on its own (CloudFade): in when it appears, slower for the
@@ -535,16 +534,10 @@ int PickEffect(double mix) {
 	return Rand01() < kWispShare * (1.0 - thick) ? 1 : 0;
 }
 
-// Share of the clouds that sweep over the wings and along the fuselage:
-// more in thin cloud (always something passing the windows), fewer in thick
-// cloud where the sides fill up too.
-double NearShare(double dens) {
-	return 0.3 - 0.1 * fmin(1.0, dens);
-}
-
 // lead: metres ahead along the flight path. fade_in: seconds the cloud takes
-// to appear (longer for the first clouds when entering a cloud).
-bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
+// to appear (longer for the first clouds when entering a cloud). cell of
+// cells: which part of the box around the path it goes in (see SpawnStep).
+bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int cell = 0, int cells = 1) {
 	Puff* slot = nullptr;
 	int alive = 0;
 	for (Puff& p : g_puffs) {
@@ -559,27 +552,21 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	double h = sqrt(fe * fe + fn * fn);
 	double re = h > 1e-3 ? fn / h : 1.0, rn = h > 1e-3 ? -fe / h : 0.0;
 
-	// Random side/vertical offset. A share of the clouds comes in flat over the
-	// wings and along the fuselage (a bit wider than the wingspan, a few
-	// metres up/down) so they sweep over the wing and briefly hide it; the
-	// rest spreads wider. Climbing or descending steeply the vertical spread
-	// shrinks, so clouds stay on the path instead of passing above or below.
-	double steep = fmin(0.8, 4.0 * fabs(fu));
-	double side = 0.0, up = 0.0;
-	bool near = Rand01() < NearShare(dens);
-	if (near) {
-		double half_width = fmax(15.0, a.wingspan_m * 0.75);
-		side = (Rand01() * 2.0 - 1.0) * half_width;
-		up = (Rand01() * 2.0 - 1.0) * kNearVertical;
-	} else {
-		side = (Rand01() * 2.0 - 1.0) * g_cfg.lateral;
-		up = (Rand01() * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
-	}
+	// Side/vertical offset: the box (LATERAL either side, VERTICAL up and down)
+	// is cut into a grid of cells, about as wide as high, one cloud per cell
+	// at a random spot in it, so each step fills the whole box (beside, above
+	// and below the path) without clumps or empty sides. Climbing or
+	// descending steeply the box gets less high (the deck limits do the rest).
+	double steep = fmin(0.4, 2.0 * fabs(fu));
+	int rows = cells < 3 ? 1 : (int)fmax(1.0, floor(sqrt(cells * g_cfg.vertical / fmax(1.0, g_cfg.lateral)) + 0.5));
+	int cols = (cells + rows - 1) / rows;
+	double cx = ((cell % cols) + Rand01()) / cols, cy = ((cell / cols) % rows + Rand01()) / rows;
+	double side = (cx * 2.0 - 1.0) * g_cfg.lateral;
+	double up = (cy * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
 
-	// Small to big with most of them medium-small: 0.35..2.4 (over the wings
-	// 0.3..0.6), times SIZE.
+	// Small to big, mostly medium: 0.5..2.4 times SIZE.
 	double r = Rand01();
-	double size = (near ? 0.3 + 0.3 * r : 0.35 + 2.05 * pow(r, 1.6)) * g_cfg.size;
+	double size = (0.5 + 1.9 * pow(r, 1.4)) * g_cfg.size;
 	slot->half = kCloudHalfHeight * size;
 
 	double e = fe * lead + re * side;
@@ -603,9 +590,8 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	double heading = Rand01() * 360.0;
 
 	// Each cloud follows the density around us all its life (L:CLOUDSURF_DENS_LIVE,
-	// see Update), times its own factor: thin ones mixed with thicker ones, and
-	// the ones over the wings a bit denser.
-	double factor = near ? 1.3 : 1.0 - kDensVar * Rand01();
+	// see Update), times its own factor: thin ones mixed with thicker ones.
+	double factor = 1.0 - kDensVar * Rand01();
 	const Effect& fx = kEffects[PickEffect(g_mix)];
 	FsVfxGraphParam params[20];
 	int nparams = 0;
@@ -665,13 +651,14 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in) {
 	return true;
 }
 
-// One spawn step: CLUSTER clouds spread along the track.
+// One spawn step: CLUSTER clouds spread along the track, one in each cell of
+// the box around the path (see SpawnPuff).
 void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, double fade_in = kFadeInSpawn) {
 	int n = (int)g_cfg.cluster;
 	if (n < 1) n = 1;
 	if (n > 16) n = 16;
 	for (int i = 0; i < n; ++i)
-		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in);
+		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in, i, n);
 }
 
 // Density 0..1 from the sim's cloud density at the aircraft: smoothed over

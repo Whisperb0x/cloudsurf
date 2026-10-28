@@ -46,7 +46,8 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
-many of them, 120 m wide and 50 m high by default. They are a neutral light
+many of them, spread evenly through a box 120 m either side and 50 m above
+and below your path by default. They are a neutral light
 grey lit by the sim's own light, so the sim decides how dark they are; the
 Brightness slider matches them to the sim's cloud. (Advanced has an
 experimental unlit look.) The
@@ -58,8 +59,8 @@ Most of CloudSurf follows the sim on its own: when clouds start and stop,
 how thick, dark and many they are (the sim's cloud density), how close new
 clouds come (near cloud edges and in steep climbs or descents), staying inside
 the cloud layer (its real top and base are learned as you fly through them),
-which clouds stay or fade out when you leave a cloud, the share over the wings,
-and the light from your aircraft.
+which clouds stay or fade out when you leave a cloud, and the light from your
+aircraft.
 
 **Advanced** shows what is automatic with live values, the few fixed
 settings (cloud style, including the experimental wisps made from cloud photo
