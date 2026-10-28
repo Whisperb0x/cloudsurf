@@ -24,39 +24,9 @@
                                     <div id="csMain"></div>
 
                                     <div class="ctrl-master-toggle">
-                                        <p>Calibrate: tune the look per cloud density</p>
-                                        <input type="checkbox" id="csCalOpen" />
-                                    </div>
-                                    <div class="ctrl-master-toggle">
-                                        <p>Advanced: what is automatic, fixed settings, debug</p>
+                                        <p>Advanced: what is automatic, all settings, calibrate, debug</p>
                                         <input type="checkbox" id="csShowDebug" />
                                     </div>
-                                </div>
-
-                                <div id="csCal" style="display: none;">
-                                <p class="ctrl-section-label">Calibrate</p>
-                                <div class="ctrl-master-big cs-box">
-                                    <p class="cs-hint">While this is open the sliders below act live (Auto FPS is off). Fly in a cloud, tune, then Confirm: the values are stored for this cloud density. Between stored points CloudSurf blends them by density.</p>
-                                    <div class="cs-grid">
-                                        <span>Sim density here</span><span id="csCalPct" class="cs-val">-</span>
-                                        <span>Frame rate</span><span id="csCalFps" class="cs-val">-</span>
-                                        <span>Clouds reach</span><span id="csCalReach" class="cs-val">-</span>
-                                    </div>
-                                    <div class="ctrl-master-toggle">
-                                        <p>Standard clouds</p>
-                                        <input type="checkbox" id="csCalClassic" />
-                                    </div>
-                                    <div id="csCalSliders"></div>
-                                    <div class="cs-buttons">
-                                        <button class="cs-btn cs-btn-main" id="csCalConfirm">Confirm</button>
-                                        <button class="cs-btn" id="csCalLoad">Load values for here</button>
-                                    </div>
-                                    <p class="cs-label">Stored points</p>
-                                    <div id="csCalList"></div>
-                                    <div class="cs-buttons">
-                                        <button class="cs-btn" id="csCalClear">Delete all points</button>
-                                    </div>
-                                </div>
                                 </div>
 
                                 <div id="csDebug" style="display: none;">
@@ -84,7 +54,7 @@
                                     </div>
                                 </div>
 
-                                <p class="ctrl-section-label">Fixed settings</p>
+                                <p class="ctrl-section-label">Settings</p>
                                 <div class="ctrl-master-big cs-box">
                                     <div class="cs-effect">
                                         <p>Cloud style</p>
@@ -97,6 +67,36 @@
                                         <input type="checkbox" id="csLit" />
                                     </div>
                                     <div id="csSliders"></div>
+                                </div>
+
+                                <p class="ctrl-section-label">Calibrate</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="ctrl-master-toggle">
+                                        <p>Calibrate: tune the look per cloud density</p>
+                                        <input type="checkbox" id="csCalOpen" />
+                                    </div>
+                                    <div id="csCal" style="display: none;">
+                                    <p class="cs-hint">While this is open the sliders below act live (Auto FPS is off). Fly in a cloud, tune, then Confirm: the values are stored for this cloud density. Between stored points CloudSurf blends them by density.</p>
+                                    <div class="cs-grid">
+                                        <span>Sim density here</span><span id="csCalPct" class="cs-val">-</span>
+                                        <span>Frame rate</span><span id="csCalFps" class="cs-val">-</span>
+                                        <span>Clouds reach</span><span id="csCalReach" class="cs-val">-</span>
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Standard clouds</p>
+                                        <input type="checkbox" id="csCalClassic" />
+                                    </div>
+                                    <div id="csCalSliders"></div>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn cs-btn-main" id="csCalConfirm">Confirm</button>
+                                        <button class="cs-btn" id="csCalLoad">Load values for here</button>
+                                    </div>
+                                    <p class="cs-label">Stored points</p>
+                                    <div id="csCalList"></div>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn" id="csCalClear">Delete all points</button>
+                                    </div>
+                                    </div>
                                 </div>
 
                                 <p class="ctrl-section-label">Debug</p>

@@ -31,18 +31,24 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
 ## Settings
 
 The panel opens with a status line (in cloud with its density and how many
-clouds are around you, leaving cloud, clear air, paused) and a few controls:
+clouds are around you, leaving cloud, clear air, paused) and just a few
+controls:
 
 | Setting | Default | What it does |
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
 | Performance | Auto | **Auto** picks the number of clouds (up to 128, 8 per step) so your frame rate in cloud stays within 10 % of the frame rate just before it; **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
+| Aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
+| Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
+
+Everything else is under **Advanced**, among it:
+
+| Setting | Default | What it does |
+|---|---|---|
 | Clouds around you | 128 | how many clouds exist at once (with Auto: at most); moving it makes the preset "custom" (Auto off) |
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, times the automatic brightness (darker in denser cloud and thicker decks) |
-| Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
-| Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
 many of them, spread evenly through a box 100 m either side and 100 m above
@@ -62,7 +68,7 @@ the cloud layer (its real top and base are learned as you fly through them),
 which clouds stay or fade out when you leave a cloud, and the light from your
 aircraft.
 
-**Calibrate** tunes the look by hand per cloud density. While it is open its
+**Calibrate** (under Advanced) tunes the look by hand per cloud density. While it is open its
 sliders act live (Auto FPS is off): cloud density, size, number of clouds,
 wing fade, brightness, glow from your lights (up to 30x), how often new clouds come (every so many metres
 flown), how far ahead they appear, standard clouds on/off, the share of wisps,

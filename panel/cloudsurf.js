@@ -2,16 +2,16 @@
 // Talks to the CloudSurf WASM module only through L:CLOUDSURF_* vars.
 (function () {
 	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
-	// show on the main page; the rest are the fixed settings under "Advanced".
+	// show on the main page (kept simple); the rest are under "Advanced".
 	// Everything else follows the sim on its own (see the Automatic box).
-	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "BRIGHT", "WING", "GLOW"];
+	const MAIN = ["GLOW", "WING"];
 	const SLIDERS = [
 		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (times the automatic one)", 0.2, 3, 0.05, 1.0, "x"],
+		["GLOW",         "Aircraft lights (glow in cloud)", 0, 30, 0.05, 0.85, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
-		["GLOW",         "Glow from aircraft lights", 0, 30, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 800, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],
@@ -571,7 +571,13 @@
 		applyAll();
 		startLayers();
 		$("csShowDebug").addEventListener("change", () => {
-			$("csDebug").style.display = $("csShowDebug").checked ? "block" : "none";
+			const open = $("csShowDebug").checked;
+			$("csDebug").style.display = open ? "block" : "none";
+			// Calibrate lives under Advanced: closing it ends live tuning too
+			if (!open && $("csCalOpen").checked) {
+				$("csCalOpen").checked = false;
+				$("csCalOpen").dispatchEvent(new Event("change"));
+			}
 		});
 		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
 			b.addEventListener("click", () => setPreset(b.getAttribute("data-preset"))));
