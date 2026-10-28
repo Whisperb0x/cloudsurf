@@ -434,16 +434,18 @@ void UpdateBeam() {
 // wings (see tools/make_cloud_vfx.py). How many and how dense follow the live
 // cloud density (L:CLOUDSURF_DENS_LIVE) and the Wing fade slider
 // (L:CLOUDSURF_WING_NOW, or its calibrated value), the density with a slow gusty swing so the wing fades in
-// and out; outside cloud there are none.
+// and out; outside cloud there are none. Both also follow L:CLOUDSURF_WING_K
+// (see UpdateWingK): it builds up as the clouds come around you, and goes
+// at once when you leave.
 const double kWingAhead = 35.0;     // m in front of the aircraft origin
 FsVfxId g_wing_id = (FsVfxId)FSVFXID_NULL;
 char g_wing_half[24];
 const char* kWingRateRpn =
-	"(L:CLOUDSURF_WING_NOW, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * 70 *";
+	"(L:CLOUDSURF_WING_NOW, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * 70 * (L:CLOUDSURF_WING_K, number) *";
 const char* kWingAlphaRpn =
 	"(L:CLOUDSURF_DENS_LIVE, number) 0.7 * "
 	"(E:SIMULATION TIME, seconds) 0.9 * sin (E:SIMULATION TIME, seconds) 2.3 * sin + 0.15 * 0.8 + * "
-	"(L:CLOUDSURF_WING_NOW, number) * 0 max 0.95 min";
+	"(L:CLOUDSURF_WING_NOW, number) * (L:CLOUDSURF_WING_K, number) * 0 max 0.95 min";
 
 int WingEffect() {
 	for (int i = 0; i < kEffectCount; ++i)
@@ -854,9 +856,6 @@ double DeckThickness(double* bot_out = nullptr, double* top_out = nullptr) {
 // unknown deck.
 // Unlit (experimental) the sim gives no light to go by, so the sun's
 // elevation (smoothly from night to day) comes in as well.
-// L:CLOUDSURF_VIS is how far away clouds start to fade in: far beyond where
-// they appear, so they come at you from far, as before.
-const double kVisFar = 5000.0;  // m
 const double kToneBase = 0.94, kTonePerPct = 0.105, kTonePerKm = 0.06, kToneMin = 0.15;
 const double kToneMaxPct = 15.0;   // the sim sometimes reports 100 %
 const double kToneSmooth = 2.0;    // s
@@ -899,7 +898,6 @@ void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 	}
 	SetL("TONE", fmin(3.0, fmax(0.0, tone)));
 	SetL("SUN", elev);
-	SetL("VIS", kVisFar);
 }
 
 // Distance flown per spawn step. The MAX_ALIVE budget is spread evenly over
@@ -1025,6 +1023,56 @@ void HandleExit(const Aircraft& a) {
 		if (beyond || AlongTrack(a, p) > keep) FadeOutPuff(p, a.time);
 		else FadeOutPuff(p, a.time, kExitNearDelay);
 	}
+}
+
+// L:CLOUDSURF_VIS: the clouds fade in by distance, from nothing at VIS to
+// full at VIS / 2 (the effect, CloudVis), so a new cloud comes out of the fog
+// instead of popping up where it appears. VIS follows the spawn distance
+// (kVisLead times it, smoothly over kVisSmooth); entering a cloud it starts
+// there at once. Test mode: kVisFar, as good as no fade.
+const double kVisFar = 5000.0, kVisLead = 1.0;  // m, -
+const double kVisSmooth = 1.0;                  // s
+double g_vis = kVisFar;
+bool g_vis_active = false;
+
+void UpdateVis(double dt, bool active, bool test, double lead_now) {
+	if (test) g_vis = kVisFar;
+	else if (active && lead_now > 0.0) {
+		double want = lead_now * kVisLead;
+		g_vis = g_vis_active ? g_vis + (want - g_vis) * fmin(1.0, dt / kVisSmooth) : want;
+	}
+	g_vis_active = active && !test;
+	SetL("VIS", g_vis);
+}
+
+// L:CLOUDSURF_WING_K, 0..1 on the wing fade: how much of the space close
+// around you (within kWingNear ahead, kWingBehind behind) is filled with
+// clouds, weighted by their size (the small first ones count little), against
+// kWingFill of what the spawning puts there in steady cloud. It builds up over
+// kWingRise as the big clouds come around you; leaving a cloud it goes over
+// kWingDrop, at once (without waiting out a short gap).
+const double kWingNear = 400.0, kWingBehind = 100.0;  // m
+const double kWingFill = 0.5;
+const double kWingRise = 2.0, kWingFall = 1.0, kWingDrop = 0.35;  // s
+double g_wing_k = 0.0;
+double g_spacing_now = 100.0;
+
+void UpdateWingK(const Aircraft& a, double dt, bool cloudy) {
+	double want = 0.0, tau = kWingDrop;
+	if (cloudy) {
+		double around = 0.0;
+		double full_half = kCloudHalfHeight * fmax(0.1, g_cfg.size);
+		for (const Puff& p : g_puffs) {
+			if (p.state != PUFF_LIVE) continue;
+			double along = AlongTrack(a, p);
+			if (along > -kWingBehind && along < kWingNear) around += fmin(1.0, p.half / full_half);
+		}
+		double steady = fmax(1.0, g_cfg.cluster) * (kWingNear + kWingBehind) / fmax(kMinSpacing, g_spacing_now);
+		want = fmin(1.0, around / fmax(3.0, kWingFill * steady));
+		tau = want > g_wing_k ? kWingRise : kWingFall;
+	}
+	g_wing_k += (want - g_wing_k) * fmin(1.0, dt / tau);
+	SetL("WING_K", g_wing_k);
 }
 
 void Update() {
@@ -1173,6 +1221,7 @@ void Update() {
 		} else {
 			g_travel += a.speed * dt;
 			double spacing = DensitySpacing(dens);
+			g_spacing_now = spacing;
 			// Density changing fast means we are near an edge: new clouds come
 			// closer (the cloud far ahead may already be different), more of
 			// them when it gets thicker, fewer and closer still when it thins
@@ -1215,6 +1264,9 @@ void Update() {
 	} else {
 		g_travel = 0.0;
 	}
+
+	UpdateVis(dt, active, test, lead_now);
+	UpdateWingK(a, dt, test || in_cloud);
 
 	int count = 0;
 	for (const Puff& p : g_puffs) if (p.state != PUFF_FREE) ++count;
