@@ -99,20 +99,21 @@ enum { EVT_FRAME = 1, EVT_SIMSTOP = 2 };
 // the sim on its own; the fixed values for that are the constants below.
 struct Config {
 	double enable, lead_max, lateral, vertical, full_pct, max_alive, mult, cluster,
-	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit;
+	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps;
 };
 
 struct ConfigVar { const char* name; double def; double Config::* field; };
 
 // Defaults are written once at start; they match the panel's defaults (the
-// Balanced preset).
+// Auto preset).
 const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
+	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
 	{ "LEAD_MAX",   1200.0, &Config::lead_max },  // m ahead where new clouds appear (closer near edges)
 	{ "LATERAL",    120.0, &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   50.0,  &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
-	{ "MAX_ALIVE",  60.0,  &Config::max_alive },  // clouds at once (frame rate)
+	{ "MAX_ALIVE",  128.0, &Config::max_alive },  // clouds at once (frame rate); with AUTO the most
 	{ "MULT",       2.0,   &Config::mult },       // thickness
 	{ "CLUSTER",    8.0,   &Config::cluster },    // clouds per spawn step
 	{ "SIZE",       1.65,  &Config::size },       // cloud size
@@ -534,6 +535,8 @@ int PickEffect(double mix) {
 	return Rand01() < kWispShare * (1.0 - thick) ? 1 : 0;
 }
 
+int CloudCap();
+
 // lead: metres ahead along the flight path. fade_in: seconds the cloud takes
 // to appear (longer for the first clouds when entering a cloud). cell of
 // cells: which part of the box around the path it goes in (see SpawnStep).
@@ -544,7 +547,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 		if (p.state != PUFF_FREE) ++alive;
 		else if (!slot) slot = &p;
 	}
-	if (!slot || alive >= (int)g_cfg.max_alive) return false;
+	if (!slot || alive >= CloudCap()) return false;
 
 	// Unit vectors: forward along velocity, right horizontal; vertical offsets
 	// use world up.
@@ -651,6 +654,67 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	return true;
 }
 
+// Auto FPS (L:CLOUDSURF_AUTO): how many clouds there are at once (g_cap, up
+// to MAX_ALIVE) is set so the frame rate in cloud stays within kAutoDrop of
+// the frame rate just before it (the baseline, measured while there are no
+// clouds of ours). Too slow: fewer clouds, and the farthest ones ahead fade
+// out; fast enough with all of them in use: a few more. What it found is
+// kept for the next cloud.
+const double kAutoDrop = 0.10;      // the frame rate may drop at most this share
+const double kAutoMin = 15.0;       // clouds at least
+const double kAutoStart = 60.0;     // clouds in the first cloud of a flight
+const double kAutoStep = 1.5;       // s between adjustments
+const double kAutoSettle = 2.0;     // s after entering a cloud before the first one
+const double kAutoTrimAhead = 300.0;  // m, only clouds further ahead fade out
+double g_fps_frame = 0.0;           // frame rate the sim reports with each frame
+double g_fps = 0.0, g_fps_base = 0.0, g_base_time = 0.0;
+double g_cap = kAutoStart, g_next_auto = 0.0;
+int g_at_min = 0;                   // adjustments in a row too slow with the fewest clouds
+
+int CloudCap() {
+	return (int)(g_cfg.autofps > 0.5 ? fmin(g_cap, g_cfg.max_alive) : g_cfg.max_alive);
+}
+
+void UpdateAutoFps(const Aircraft& a, double dt, bool active, int alive) {
+	if (g_fps_frame > 0.0) g_fps += (g_fps_frame - g_fps) * (g_fps > 0.0 ? fmin(1.0, dt) : 1.0);
+	if (!active && alive == 0 && g_fps > 0.0) {
+		g_fps_base += (g_fps - g_fps_base) * (g_base_time > 0.0 ? fmin(1.0, dt / 4.0) : 1.0);
+		g_base_time += dt;
+	}
+	if (!active) g_next_auto = a.time + kAutoSettle;
+	g_cap = fmin(g_cap, fmax(kAutoMin, g_cfg.max_alive));
+	if (g_cfg.autofps > 0.5 && active && g_base_time >= 3.0 && g_fps > 0.0 && a.time >= g_next_auto) {
+		g_next_auto = a.time + kAutoStep;
+		double ratio = g_fps / fmax(1.0, g_fps_base);
+		// Still too slow with the fewest clouds: the drop is the sim's own (its
+		// cloud, the scenery), not ours, so the frame rate here is the baseline.
+		g_at_min = ratio < 1.0 - kAutoDrop && g_cap <= kAutoMin ? g_at_min + 1 : 0;
+		if (g_at_min >= 3) {
+			g_fps_base = g_fps;
+			g_at_min = 0;
+		} else if (ratio < 1.0 - kAutoDrop) {
+			g_cap = fmax(kAutoMin, g_cap * 0.85);
+			// fade out the farthest clouds ahead until there are no more than the cap
+			for (int n = alive - CloudCap(); n > 0; --n) {
+				Puff* far = nullptr;
+				double far_along = kAutoTrimAhead;
+				for (Puff& p : g_puffs) {
+					if (p.state != PUFF_LIVE) continue;
+					double along = AlongTrack(a, p);
+					if (along > far_along) { far_along = along; far = &p; }
+				}
+				if (!far) break;
+				FadeOutPuff(*far, a.time);
+			}
+		} else if (ratio > 1.0 - 0.5 * kAutoDrop && alive >= CloudCap() - 4) {
+			g_cap = fmin(g_cfg.max_alive, g_cap + 4.0);
+		}
+	}
+	SetL("FPS", g_fps);
+	SetL("FPS_BASE", g_base_time > 0.0 ? g_fps_base : 0.0);
+	SetL("CAP", CloudCap());
+}
+
 // One spawn step: CLUSTER clouds spread along the track, one in each cell of
 // the box around the path (see SpawnPuff).
 void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, double fade_in = kFadeInSpawn) {
@@ -736,7 +800,7 @@ void UpdateTone(const Aircraft& a) {
 double DensitySpacing(double dens) {
 	double cluster = fmin(16.0, fmax(1.0, g_cfg.cluster));
 	double stretch = fmax(50.0, g_cfg.lead_max + kBehind);
-	double even = stretch * cluster / fmax(1.0, g_cfg.max_alive);
+	double even = stretch * cluster / fmax(1.0, (double)CloudCap());
 	double spacing = fmax(kMinSpacing, even);
 	return spacing / (0.4 + 0.6 * fmin(1.0, dens));
 }
@@ -922,6 +986,9 @@ void Update() {
 			p.state = PUFF_FREE;
 		}
 	}
+	int alive = 0;
+	for (const Puff& p : g_puffs) if (p.state != PUFF_FREE) ++alive;
+	UpdateAutoFps(a, dt, active && !test, alive);
 
 	double lead_now = 0.0;
 	if (active) {
@@ -993,6 +1060,8 @@ void CALLBACK Dispatch(SIMCONNECT_RECV* data, DWORD, void*) {
 	if (data->dwID != SIMCONNECT_RECV_ID_EVENT && data->dwID != SIMCONNECT_RECV_ID_EVENT_FRAME)
 		return;
 	auto* evt = static_cast<SIMCONNECT_RECV_EVENT*>(data);
+	if (data->dwID == SIMCONNECT_RECV_ID_EVENT_FRAME)
+		g_fps_frame = static_cast<SIMCONNECT_RECV_EVENT_FRAME*>(data)->fFrameRate;
 	if (evt->uEventID == EVT_FRAME) Update();
 	else if (evt->uEventID == EVT_SIMSTOP) { DestroyAll(); DestroyBeam(); DestroyWing(); g_last_time = -1.0; }
 }

@@ -6,7 +6,7 @@
 	// Everything else follows the sim on its own (see the Automatic box).
 	const MAIN = ["MAX_ALIVE", "MULT", "SIZE", "BRIGHT", "WING", "GLOW"];
 	const SLIDERS = [
-		["MAX_ALIVE",    "Clouds around you",     10, 128, 1,    60,   ""],
+		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (match the sim's cloud)", 0.2, 3, 0.05, 1.0, "x"],
@@ -24,13 +24,18 @@
 		["BEAM_PITCH",   "Beam direction (pitch)", -90, 90, 1,  0,    "deg"],
 	];
 	// Performance presets: how many clouds there are at once and per step.
-	// Moving one of these sliders yourself makes the preset "custom".
+	// Auto lets the module pick the number (up to MAX_ALIVE) so the frame rate
+	// in cloud stays within 10 % of the one before it. Moving one of these
+	// sliders yourself makes the preset "custom" (fixed, Auto off).
 	const PRESETS = {
-		performance: { MAX_ALIVE: 35, CLUSTER: 6 },
-		balanced:    { MAX_ALIVE: 60, CLUSTER: 8 },
-		quality:     { MAX_ALIVE: 100, CLUSTER: 10 },
+		auto:        { AUTO: 1, MAX_ALIVE: 128, CLUSTER: 8 },
+		performance: { AUTO: 0, MAX_ALIVE: 35, CLUSTER: 6 },
+		balanced:    { AUTO: 0, MAX_ALIVE: 60, CLUSTER: 8 },
+		quality:     { AUTO: 0, MAX_ALIVE: 100, CLUSTER: 10 },
 	};
-	const DEFAULT_PRESET = "balanced";
+	const DEFAULT_PRESET = "auto";
+	// Settings without a control of their own (set by the presets).
+	const HIDDEN = [["AUTO", 1]];
 	// Effect labels, filled in by build.py in the same order as kEffects.
 	// L:CLOUDSURF_EFFECT is an index into it, or -1 for the mix (style Full).
 	const EFFECTS = /*@EFFECTS@*/[];
@@ -82,6 +87,11 @@
 		["LIT", "LATERAL", "VERTICAL", "MULT", "MAX_ALIVE", "CLUSTER", "PRESET", "BRIGHT"].forEach(k => delete settings[k]);
 		settings.__v4 = true;
 	}
+	// v5: Auto FPS is the default.
+	if (!settings.__v5) {
+		["AUTO", "MAX_ALIVE", "CLUSTER", "PRESET"].forEach(k => delete settings[k]);
+		settings.__v5 = true;
+	}
 	const save = () => {
 		const raw = JSON.stringify(settings);
 		try { if (typeof SetStoredData === "function") SetStoredData(STORE_KEY, raw); } catch (e) {}
@@ -94,7 +104,9 @@
 		const s = SLIDERS.find(x => x[0] === key);
 		if (s) return s[5];
 		const t = TOGGLES.find(x => x[0] === key);
-		return t ? t[2] : 0;
+		if (t) return t[2];
+		const h = HIDDEN.find(x => x[0] === key);
+		return h ? h[1] : 0;
 	}
 	const valueOf = key => (key in settings ? settings[key] : defaultOf(key));
 
@@ -126,7 +138,11 @@
 				settings[key] = v;
 				$("csVal_" + key).textContent = fmt(v, step) + unit;
 				setL(key, v);
-				if (Object.keys(PRESETS.balanced).includes(key)) settings.PRESET = "custom";
+				if (Object.keys(PRESETS.balanced).includes(key)) {
+					settings.PRESET = "custom";
+					settings.AUTO = 0;
+					setL("AUTO", 0);
+				}
 				save();
 				showChoices();
 			});
@@ -175,7 +191,7 @@
 		Object.keys(PRESETS[name]).forEach(key => {
 			settings[key] = PRESETS[name][key];
 			setL(key, settings[key]);
-			showSlider(key);
+			if (SLIDERS.some(s => s[0] === key)) showSlider(key);
 		});
 		save();
 		showChoices();
@@ -188,6 +204,7 @@
 		setL("EFFECT", valueOf("EFFECT"));
 		SLIDERS.forEach(([key]) => setL(key, valueOf(key)));
 		TOGGLES.forEach(([key, id]) => setL(key, $(id) && $(id).checked ? 1 : 0));
+		HIDDEN.forEach(([key]) => setL(key, valueOf(key)));
 		setL("INIT", 1);
 	}
 
@@ -324,6 +341,10 @@
 		const tone = getL("TONE"), sun = getL("SUN"), vis = getL("VIS");
 		setText("csTone", isNaN(tone) ? "-" : `${tone.toFixed(2)}  (sun ${isNaN(sun) ? "-" : sun.toFixed(0)}°)`);
 		setText("csVis", vis > 0 ? `${vis.toFixed(0)} m` : "-");
+		const fps = getL("FPS"), fpsBase = getL("FPS_BASE"), cap = getL("CAP");
+		setText("csAutoFps", valueOf("AUTO") < 0.5 ? "off (fixed number)" :
+		        fpsBase > 0 ? `${fps.toFixed(0)} fps (before cloud ${fpsBase.toFixed(0)}), up to ${cap} clouds`
+		                    : `measuring, up to ${cap} clouds`);
 		const leadNow = getL("LEAD_NOW");
 		setText("csLeadNow", leadNow > 0 ? `${leadNow.toFixed(0)} m` : "-");
 		const deckTop = getL("DECK_TOP"), deckBot = getL("DECK_BOT");

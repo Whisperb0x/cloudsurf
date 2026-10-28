@@ -36,8 +36,8 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Setting | Default | What it does |
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
-| Performance | Balanced | **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
-| Clouds around you | 60 | how many clouds exist at once; moving it makes the preset "custom" |
+| Performance | Auto | **Auto** picks the number of clouds (up to 128, 8 per step) so your frame rate in cloud stays within 10 % of the frame rate just before it; **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
+| Clouds around you | 128 | how many clouds exist at once (with Auto: at most); moving it makes the preset "custom" (Auto off) |
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
