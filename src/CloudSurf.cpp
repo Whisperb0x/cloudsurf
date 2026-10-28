@@ -807,7 +807,7 @@ double SunElevation(const Aircraft& a) {
 // The cloud deck we fly in, in metres: the weather's layer with the layers
 // overlapping it. Returns its thickness (kDeckUnknown without one) and sets
 // *bot_out and *top_out (when there is one).
-const double kDeckUnknown = 2000.0;
+const double kDeckUnknown = 1000.0;
 
 double DeckThickness(double* bot_out = nullptr, double* top_out = nullptr) {
 	if (g_layer_now >= 0) {
@@ -838,15 +838,19 @@ double DeckThickness(double* bot_out = nullptr, double* top_out = nullptr) {
 // almost as light as thin cloud (the sun comes through from above): from
 // kTopFrom of the deck's height up to kTopFull, blended by up to kTopLift
 // towards the tone with only kTopDens of the density's darkening.
-// It follows all that smoothly and holds after leaving a cloud.
+// It follows all that smoothly. Leaving a cloud, out in the bright air, the
+// clouds still around turn light again (kToneBase) over kToneExit. Flight of
+// 28 Oct 2026 evening: the fit came out too grey (whiter clouds outside than
+// ours), hence the lower kTonePerPct and the thinner unknown deck.
 // Unlit (experimental) the sim gives no light to go by, so the sun's
 // elevation (smoothly from night to day) comes in as well.
 // L:CLOUDSURF_VIS is how far away clouds start to fade in: far beyond where
 // they appear, so they come at you from far, as before.
 const double kVisFar = 5000.0;  // m
-const double kToneBase = 0.94, kTonePerPct = 0.132, kTonePerKm = 0.06, kToneMin = 0.15;
+const double kToneBase = 0.94, kTonePerPct = 0.105, kTonePerKm = 0.06, kToneMin = 0.15;
 const double kToneMaxPct = 15.0;   // the sim sometimes reports 100 %
 const double kToneSmooth = 2.0;    // s
+const double kToneExit = 1.0;      // s
 const double kTopFrom = 0.5, kTopFull = 0.9, kTopLift = 0.75, kTopDens = 0.35;
 double g_auto_tone = -1.0;
 
@@ -867,6 +871,8 @@ void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 		SetL("DECK_UP", up);
 		g_auto_tone = g_auto_tone < 0.0 ? want : g_auto_tone + (want - g_auto_tone) * fmin(1.0, dt / kToneSmooth);
 		SetL("DECK_KM", km);
+	} else if (g_auto_tone >= 0.0 && a.time - g_last_cloudy >= kExitHold) {  // a real exit, not a short gap
+		g_auto_tone += (kToneBase - g_auto_tone) * fmin(1.0, dt / kToneExit);
 	}
 	double tone = g_cfg.bright * (g_auto_tone < 0.0 ? kToneBase : g_auto_tone);
 	if (g_cfg.lit < 0.5) {
