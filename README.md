@@ -45,7 +45,7 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
-many of them, spread evenly through a box 120 m either side and 50 m above
+many of them, spread evenly through a box 100 m either side and 100 m above
 and below your path by default. They are a light grey lit by the sim's own
 light, darker the denser the cloud and the thicker the deck you are in (fitted
 to brightness chosen by hand in a calibration flight); the Brightness slider

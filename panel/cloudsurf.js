@@ -13,8 +13,8 @@
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 30, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 800, "m"],
-		["LATERAL",      "Sideways spread",       20, 200, 1,    120,  "m"],
-		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 50, "m"],
+		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
+		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
 		["FULL_PCT",     "Sim density for full thickness", 3, 40, 1, 10, "%"],
 		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
@@ -85,6 +85,11 @@
 	if (!settings.__v4) {
 		["LIT", "LATERAL", "VERTICAL", "MULT", "MAX_ALIVE", "CLUSTER", "PRESET", "BRIGHT"].forEach(k => delete settings[k]);
 		settings.__v4 = true;
+	}
+	// v7: a box 100 m either side and 100 m up and down.
+	if (!settings.__v7) {
+		["LATERAL", "VERTICAL"].forEach(k => delete settings[k]);
+		settings.__v7 = true;
 	}
 	// v6: new clouds at 800 m, no beam of mist.
 	if (!settings.__v6) {

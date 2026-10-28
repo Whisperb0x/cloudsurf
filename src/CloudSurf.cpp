@@ -111,8 +111,8 @@ const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
 	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
 	{ "LEAD_MAX",   800.0, &Config::lead_max },   // m ahead where new clouds appear (closer near edges)
-	{ "LATERAL",    120.0, &Config::lateral },    // m sideways spread
-	{ "VERTICAL",   50.0,  &Config::vertical },   // m up/down spread
+	{ "LATERAL",    100.0, &Config::lateral },    // m sideways spread
+	{ "VERTICAL",   100.0, &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
 	{ "MAX_ALIVE",  128.0, &Config::max_alive },  // clouds at once (frame rate); with AUTO the most
 	{ "MULT",       2.0,   &Config::mult },       // thickness
@@ -570,6 +570,7 @@ int PickEffect(double mix) {
 }
 
 int CloudCap();
+int g_cell_offset = 0;  // set per spawn step, see SpawnPuff
 
 // lead: metres ahead along the flight path. fade_in: seconds the cloud takes
 // to appear (longer for the first clouds when entering a cloud). cell of
@@ -598,7 +599,8 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	double steep = fmin(0.4, 2.0 * fabs(fu));
 	int rows = cells < 3 ? 1 : (int)fmax(1.0, floor(sqrt(cells * g_cfg.vertical / fmax(1.0, g_cfg.lateral)) + 0.5));
 	int cols = (cells + rows - 1) / rows;
-	double cx = ((cell % cols) + Rand01()) / cols, cy = ((cell / cols) % rows + Rand01()) / rows;
+	cell = (cell + g_cell_offset) % (rows * cols);  // a grid with more cells than clouds: a random one stays empty
+	double cx = ((cell % cols) + Rand01()) / cols, cy = (cell / cols + Rand01()) / rows;
 	double side = (cx * 2.0 - 1.0) * g_cfg.lateral;
 	double up = (cy * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
 
@@ -759,6 +761,7 @@ void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, doub
 	int n = (int)g_cfg.cluster;
 	if (n < 1) n = 1;
 	if (n > 16) n = 16;
+	g_cell_offset = (int)(Rand01() * 16.0);
 	for (int i = 0; i < n; ++i)
 		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in, i, n, size_k);
 }
