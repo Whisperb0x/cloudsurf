@@ -100,7 +100,7 @@ enum { EVT_FRAME = 1, EVT_SIMSTOP = 2 };
 // the sim on its own; the fixed values for that are the constants below.
 struct Config {
 	double enable, lead_max, lateral, vertical, full_pct, max_alive, mult, cluster,
-	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps;
+	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps, intensity;
 };
 
 struct ConfigVar { const char* name; double def; double Config::* field; };
@@ -109,6 +109,7 @@ struct ConfigVar { const char* name; double def; double Config::* field; };
 // Auto preset).
 const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
+	{ "INTENSITY",  100.0, &Config::intensity },  // % of the full effect: density (so also wing fade) and, through it, the number of clouds; 0 = off
 	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
 	{ "LEAD_MAX",   800.0, &Config::lead_max },   // m ahead where new clouds appear (closer near edges)
 	{ "LATERAL",    100.0, &Config::lateral },    // m sideways spread
@@ -1035,7 +1036,8 @@ void Update() {
 	}
 	if (dt == 0.0) return;  // paused
 
-	double dens = Calibrate(CloudDens(a, dt), a.time);
+	double intensity = fmin(1.0, fmax(0.0, g_cfg.intensity / 100.0));
+	double dens = Calibrate(CloudDens(a, dt), a.time) * intensity;
 	UpdateBeam();
 	UpdateWing(a);
 	bool rising = false;
@@ -1078,7 +1080,7 @@ void Update() {
 	if (ahead >= 0) {
 		g_layer_now = ahead;
 		g_mix = g_last_mix;
-		dens = fmin(2.0, g_last_mix * g_cfg.mult) * (a.camera == 2.0 ? kCockpitMult : 1.0);
+		dens = fmin(2.0, g_last_mix * g_cfg.mult) * (a.camera == 2.0 ? kCockpitMult : 1.0) * intensity;
 	}
 	if (in_cloud) g_last_mix = g_mix;
 

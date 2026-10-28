@@ -39,6 +39,7 @@ controls:
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
 | Performance | Auto | **Auto** picks the number of clouds (35 to 128, 8 per step) so your frame rate in cloud stays within 10 % of the frame rate just before it; **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
+| Intensity | 100 % | how strong the whole effect is: how dense the clouds and the wing fade are, and with that how many clouds come; 0 is practically off |
 | Aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
 
