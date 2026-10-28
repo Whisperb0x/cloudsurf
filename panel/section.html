@@ -33,15 +33,16 @@
                                 <p class="ctrl-section-label">Automatic (follows the sim)</p>
                                 <div class="ctrl-master-big cs-box">
                                     <ul class="cs-auto">
-                                        <li>Starts on entering a cloud, filling the space ahead at once: small clouds out to 600 m, the big ones beyond; the first clouds fade in slower</li>
+                                        <li>Starts as soon as you are in a cloud: first a wide, thin wall of small clouds about 600 m ahead, then the normal clouds beyond it; the first clouds fade in slower</li>
                                         <li>Thickness and darkness of every cloud follow the sim's cloud density around you, live, all the time; the number of clouds follows it too</li>
                                         <li>Near edges (density changing fast) and in steep climbs or descents, new clouds come closer</li>
-                                        <li>Clouds stay inside the cloud layer, from 200 m above its base to 200 m below its top; its real top and base are learned as you fly through them</li>
+                                        <li>Clouds stay inside the cloud layer of the current weather, from 150 m above its base to 150 m below its top; nothing is remembered from earlier decks</li>
+                                        <li>Thin cloud (below 3 % sim density) gets only a very light effect: fewer, fainter clouds and less wing fade</li>
                                         <li>Leaving a cloud: the clouds further ahead fade out at once (and the ones above or below you when you leave through the top or base); the last ones close by stay a second, then fade too</li>
                                         <li>Wing fade: a stream of small cloud flakes flying along with you, sent backwards over the wings; how many and how dense follow the cloud density, none outside cloud</li>
                                         <li>Auto (Performance): the number of clouds is set so your frame rate in cloud stays within 10 % of the frame rate just before it; what it finds is kept for the next cloud</li>
                                         <li>Clouds are spread evenly through the whole box around your path: beside, above and below you, without clumps or empty sides</li>
-                                        <li>Colour: a light grey lit by the sim's own light, darker the denser the cloud and the thicker the deck (from a calibration flight); Brightness scales it</li>
+                                        <li>Colour: a light grey lit by the sim's own light, darker the denser the cloud and the thicker the deck (from a calibration flight), lighter in the upper part of the deck; Brightness scales it</li>
                                         <li>Size, heading and density differ per cloud; drifting with the wind; glow from your lights</li>
                                     </ul>
                                     <div class="cs-grid">

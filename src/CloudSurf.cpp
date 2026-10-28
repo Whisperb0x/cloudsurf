@@ -135,9 +135,12 @@ const ConfigVar kConfigVars[] = {
 // Fixed values.
 const double kMinPct = 0.3;          // sim cloud density (%) below which no clouds come
 const double kMinSpeed = 25.0;       // m/s, no clouds below this
-const double kEntryNear = 200.0;     // m ahead, nearest cloud when entering a cloud
-const double kEntrySmall = 600.0;    // m ahead: entering a cloud, small clouds up to here, the big ones beyond
-const double kEntrySmallSize = 0.35; // their size, times the normal one
+// Entering a cloud, first a wide, thin wall of small clouds (see SpawnEntryWave).
+const double kEntryWave = 600.0, kEntryWaveDepth = 120.0;  // m ahead, and deep
+const double kEntryWaveWide = 3.0;   // times the box width (LATERAL)
+const double kEntryWaveDens = 0.35;  // density, times the normal one
+const double kEntrySmallSize = 0.25; // size, times the normal one
+const int kEntryWaveRows = 2, kEntryWaveCount = 10;
 const double kLeadMin = 500.0;       // m ahead new clouds appear at least, however the density changes
 const double kMinSpacing = 15.0;     // m flown per spawn step, at least
 const double kBehind = 100.0;        // m behind us a cloud is removed
@@ -178,23 +181,16 @@ struct Aircraft {
 };
 
 // Cloud layers of the active weather, written by the panel from the sim's own
-// weather API (see LAYERS in panel/cloudsurf.js). That band is only the
-// envelope: a deck can end well below its top. So the real top and base are
-// learned from leaving or entering cloud while climbing or descending
-// (deck_top/deck_bot, 0 = not seen yet) and used instead where known.
+// weather API (see LAYERS in panel/cloudsurf.js). Only the current weather
+// counts: no deck is remembered from earlier in the flight (a remembered top or
+// base is wrong as soon as the next deck differs). Without layer data (the
+// panel only gets it once it has been opened) there is no deck, and only being
+// in cloud counts.
 struct Layer { double bot_m, top_m, cov, dens; };
 const int kMaxLayers = 3;
 Layer g_layers[kMaxLayers];
 int g_layer_count = 0;
 int g_layer_now = -1;              // layer the aircraft is in or about to enter
-double g_deck_top[kMaxLayers], g_deck_bot[kMaxLayers];
-double g_layer_sig = 0.0;          // layers changed: forget what was learned
-// Without layer data (the panel only gets it once it has been opened) the deck
-// is learned from the flight alone: g_seen_top/bot (0 = not seen), valid within
-// kSeenRadius of where it was seen, and used as a layer of its own.
-bool g_layers_real = false;
-double g_seen_top = 0.0, g_seen_bot = 0.0, g_seen_lat = 0.0, g_seen_lon = 0.0;
-const double kSeenRadius = 40000.0;  // m
 const double kLayerMargin = 30.0;  // m the flight path may be outside its layer and still get clouds
 // The sim's cloud reaches beyond the weather's band (seen: ~200 m below the
 // base): in cloud up to this far outside a layer still counts as that layer, so
@@ -204,7 +200,7 @@ const double kNearLayer = 600.0;   // m
 // kDeckInTop below the top, so you fly right into them at the edge.
 // The weather's band is wider than the sim's visible cloud (seen: ~130 m at
 // the top and base), hence the wide margins.
-const double kDeckInBase = 200.0, kDeckInTop = 200.0;
+const double kDeckInBase = 150.0, kDeckInTop = 150.0;
 // Leaving through the top or base: climbing or descending at least this
 // steeply (vertical over total speed, ~2 degrees) and kVerticalExit m/s.
 const double kVerticalExit = 3.0, kVerticalExitSlope = 0.035;
@@ -313,41 +309,10 @@ void ReadLayers(const Aircraft& a) {
 		snprintf(name, sizeof(name), "LAYER%d_DENS", i + 1); l.dens = GetL(name);
 		if (l.top_m > l.bot_m && l.cov > 0.0) g_layers[g_layer_count++] = l;
 	}
-	g_layers_real = g_layer_count > 0;
-	if (g_layers_real || (g_seen_top <= 0.0 && g_seen_bot <= 0.0)) return;
-	double dn = (a.lat - g_seen_lat) / kDeg * kEarthR;
-	double de = (a.lon - g_seen_lon) / kDeg * kEarthR * cos(a.lat / kDeg);
-	if (dn * dn + de * de > kSeenRadius * kSeenRadius) {
-		g_seen_top = g_seen_bot = 0.0;  // somewhere else now
-		return;
-	}
-	Layer l;
-	l.bot_m = g_seen_bot > 0.0 ? g_seen_bot : -1e5;
-	l.top_m = g_seen_top > 0.0 ? g_seen_top : 1e5;
-	l.cov = g_seen_top > 0.0 && g_seen_bot > 0.0 ? 1.0 : 0.0;  // early start only with both known
-	l.dens = 1.0;
-	g_layers[g_layer_count++] = l;
 }
 
-// Top and base of a layer: what was seen of the real deck where known.
-double LayerTop(int i) {
-	return g_layers_real && g_deck_top[i] > 0.0 ? fmin(g_layers[i].top_m, g_deck_top[i]) : g_layers[i].top_m;
-}
-double LayerBot(int i) {
-	return g_layers_real && g_deck_bot[i] > 0.0 ? fmax(g_layers[i].bot_m, g_deck_bot[i]) : g_layers[i].bot_m;
-}
-
-// Forget the learned deck when the weather's layers change.
-void CheckLayersChanged() {
-	if (!g_layers_real) return;
-	double sig = 0.0;
-	for (int i = 0; i < g_layer_count; ++i)
-		sig += (i + 1) * (g_layers[i].bot_m + 3.0 * g_layers[i].top_m + 7.0 * g_layers[i].cov);
-	if (fabs(sig - g_layer_sig) > 1.0) {
-		for (int i = 0; i < kMaxLayers; ++i) g_deck_top[i] = g_deck_bot[i] = 0.0;
-		g_layer_sig = sig;
-	}
-}
+double LayerTop(int i) { return g_layers[i].top_m; }
+double LayerBot(int i) { return g_layers[i].bot_m; }
 
 // Layer containing alt_m (by the weather's band), or -1.
 int LayerAt(double alt_m) {
@@ -575,8 +540,9 @@ int g_cell_offset = 0;  // set per spawn step, see SpawnPuff
 // lead: metres ahead along the flight path. fade_in: seconds the cloud takes
 // to appear (longer for the first clouds when entering a cloud). cell of
 // cells: which part of the box around the path it goes in (see SpawnStep).
+// size_k, dens_k, wide_k: size, density and box width times the normal ones.
 bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int cell = 0, int cells = 1,
-               double size_k = 1.0) {
+               double size_k = 1.0, double dens_k = 1.0, double wide_k = 1.0) {
 	Puff* slot = nullptr;
 	int alive = 0;
 	for (Puff& p : g_puffs) {
@@ -597,11 +563,12 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	// and below the path) without clumps or empty sides. Climbing or
 	// descending steeply the box gets less high (the deck limits do the rest).
 	double steep = fmin(0.4, 2.0 * fabs(fu));
-	int rows = cells < 3 ? 1 : (int)fmax(1.0, floor(sqrt(cells * g_cfg.vertical / fmax(1.0, g_cfg.lateral)) + 0.5));
+	double lateral = g_cfg.lateral * wide_k;
+	int rows = cells < 3 ? 1 : (int)fmax(1.0, floor(sqrt(cells * g_cfg.vertical / fmax(1.0, lateral)) + 0.5));
 	int cols = (cells + rows - 1) / rows;
 	cell = (cell + g_cell_offset) % (rows * cols);  // a grid with more cells than clouds: a random one stays empty
 	double cx = ((cell % cols) + Rand01()) / cols, cy = (cell / cols + Rand01()) / rows;
-	double side = (cx * 2.0 - 1.0) * g_cfg.lateral;
+	double side = (cx * 2.0 - 1.0) * lateral;
 	double up = (cy * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
 
 	// Small to big, mostly medium: 0.5..2.4 times SIZE.
@@ -631,7 +598,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 
 	// Each cloud follows the density around us all its life (L:CLOUDSURF_DENS_LIVE,
 	// see Update), times its own factor: thin ones mixed with thicker ones.
-	double factor = 1.0 - kDensVar * Rand01();
+	double factor = (1.0 - kDensVar * Rand01()) * dens_k;
 	int fx_index = PickEffect(g_mix);
 	if (fx_index < 0) return false;
 	const Effect& fx = kEffects[fx_index];
@@ -766,9 +733,30 @@ void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, doub
 		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in, i, n, size_k);
 }
 
+// Entering a cloud: first a wide, thin wall of small clouds around `lead`
+// ahead (kEntryWaveRows rows of kEntryWaveCount, across kEntryWaveWide times
+// the box width), as the first wisps of the cloud.
+
+void SpawnEntryWave(const Aircraft& a, double dens, double lead) {
+	for (int row = 0; row < kEntryWaveRows; ++row) {
+		double d = lead + kEntryWaveDepth * ((row + 0.5) / kEntryWaveRows - 0.5);
+		g_cell_offset = (int)(Rand01() * 16.0);
+		for (int i = 0; i < kEntryWaveCount; ++i)
+			SpawnPuff(a, dens, d + (Rand01() - 0.5) * 0.5 * kEntryWaveDepth / kEntryWaveRows, kFadeInEntry, i,
+			          kEntryWaveCount, kEntrySmallSize, kEntryWaveDens, kEntryWaveWide);
+	}
+}
+
 // Density 0..1 from the sim's cloud density at the aircraft: smoothed over
 // about a second, zero below kMinPct, 1 at FULL_PCT. The curve lifts thin
 // clouds (cirrus is only a few percent) so they still show a little.
+// Thin cloud (below kThinPct, like the small clouds of 0.5..2 % flown through
+// on 28 Oct 2026) only gets a very light effect: g_thin, from kThinLight just
+// above kMinPct up to 1 at kThinPct, scales the density and the number of
+// clouds (see DensitySpacing).
+const double kThinPct = 3.0, kThinLight = 0.25;
+double g_thin = 1.0;
+
 double CloudDens(const Aircraft& a, double dt) {
 	double k = dt > 0 ? fmin(1.0, dt * 1.5) : 0.0;
 	// Entering a cloud starts at its density right away; changes inside are smoothed.
@@ -778,7 +766,9 @@ double CloudDens(const Aircraft& a, double dt) {
 	if (g_smooth < kMinPct) return 0.0;
 	double span = fmax(1.0, g_cfg.full_pct - kMinPct);
 	g_mix = pow(fmin(1.0, (g_smooth - kMinPct) / span), 0.6);
-	return fmin(2.0, g_mix * g_cfg.mult);
+	double t = fmin(1.0, (g_smooth - kMinPct) / (kThinPct - kMinPct));
+	g_thin = kThinLight + (1.0 - kThinLight) * t * t;
+	return fmin(2.0, g_mix * g_cfg.mult) * g_thin;
 }
 
 // How fast the cloud density changes, as a stand-in for seeing what comes
@@ -814,13 +804,13 @@ double SunElevation(const Aircraft& a) {
 	return asin(fmin(1.0, fmax(-1.0, s))) * kDeg;
 }
 
-// Thickness of the cloud deck we fly in, in metres: the weather's layer (with
-// the layers overlapping it), else the deck seen in this flight, else
-// kDeckUnknown.
+// The cloud deck we fly in, in metres: the weather's layer with the layers
+// overlapping it. Returns its thickness (kDeckUnknown without one) and sets
+// *bot_out and *top_out (when there is one).
 const double kDeckUnknown = 2000.0;
 
-double DeckThickness() {
-	if (g_layer_now >= 0 && g_layers_real) {
+double DeckThickness(double* bot_out = nullptr, double* top_out = nullptr) {
+	if (g_layer_now >= 0) {
 		double bot = g_layers[g_layer_now].bot_m, top = g_layers[g_layer_now].top_m;
 		for (bool grew = true; grew;) {
 			grew = false;
@@ -832,9 +822,10 @@ double DeckThickness() {
 				grew = true;
 			}
 		}
+		if (bot_out) *bot_out = bot;
+		if (top_out) *top_out = top;
 		return top - bot;
 	}
-	if (g_seen_top > 0.0 && g_seen_bot > 0.0) return g_seen_top - g_seen_bot;
 	return kDeckUnknown;
 }
 
@@ -843,7 +834,11 @@ double DeckThickness() {
 // calibration flight of 28 Oct 2026 (brightness chosen by hand in 9 weathers):
 // darker the denser the cloud (the main thing) and the thicker the deck,
 // kToneBase * exp(-kTonePerPct * density% - kTonePerKm * deck km), at least
-// kToneMin. It follows the density smoothly and holds after leaving a cloud.
+// kToneMin. In the upper part of a known deck it is lighter, towards the top
+// almost as light as thin cloud (the sun comes through from above): from
+// kTopFrom of the deck's height up to kTopFull, blended by up to kTopLift
+// towards the tone with only kTopDens of the density's darkening.
+// It follows all that smoothly and holds after leaving a cloud.
 // Unlit (experimental) the sim gives no light to go by, so the sun's
 // elevation (smoothly from night to day) comes in as well.
 // L:CLOUDSURF_VIS is how far away clouds start to fade in: far beyond where
@@ -852,13 +847,24 @@ const double kVisFar = 5000.0;  // m
 const double kToneBase = 0.94, kTonePerPct = 0.132, kTonePerKm = 0.06, kToneMin = 0.15;
 const double kToneMaxPct = 15.0;   // the sim sometimes reports 100 %
 const double kToneSmooth = 2.0;    // s
+const double kTopFrom = 0.5, kTopFull = 0.9, kTopLift = 0.75, kTopDens = 0.35;
 double g_auto_tone = -1.0;
 
 void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 	double elev = SunElevation(a);
 	if (in_cloud && g_smooth >= kMinPct) {
-		double km = DeckThickness() / 1000.0;
-		double want = fmax(kToneMin, kToneBase * exp(-kTonePerPct * fmin(kToneMaxPct, g_smooth) - kTonePerKm * km));
+		double bot = 0.0, top = 0.0;
+		double thick = DeckThickness(&bot, &top);
+		double km = thick / 1000.0, pct = fmin(kToneMaxPct, g_smooth);
+		double want = fmax(kToneMin, kToneBase * exp(-kTonePerPct * pct - kTonePerKm * km));
+		double up = 0.0;  // 0 low in the deck .. 1 near its top
+		if (top > bot) {
+			up = fmin(1.0, fmax(0.0, ((a.alt_m - bot) / (top - bot) - kTopFrom) / (kTopFull - kTopFrom)));
+			up = up * up * (3.0 - 2.0 * up);
+			double light = kToneBase * exp(-kTonePerPct * kTopDens * pct);
+			want += (light - want) * kTopLift * up;
+		}
+		SetL("DECK_UP", up);
 		g_auto_tone = g_auto_tone < 0.0 ? want : g_auto_tone + (want - g_auto_tone) * fmin(1.0, dt / kToneSmooth);
 		SetL("DECK_KM", km);
 	}
@@ -882,7 +888,7 @@ double DensitySpacing(double dens) {
 	double stretch = fmax(50.0, g_cfg.lead_max + kBehind);
 	double even = stretch * cluster / fmax(1.0, (double)CloudCap());
 	double spacing = fmax(kMinSpacing, even);
-	return spacing / (0.4 + 0.6 * fmin(1.0, dens));
+	return spacing / (0.4 + 0.6 * fmin(1.0, dens)) / (0.4 + 0.6 * g_thin);
 }
 
 void ReadCalibration() {
@@ -980,35 +986,12 @@ double Calibrate(double dens, double now) {
 	return g_smooth >= kMinPct ? fmin(2.0, fmax(0.0, g_calv[CK_DENS])) : 0.0;
 }
 
-// Learn the real deck from crossing its top or base while climbing or
-// descending (see Layer), in the weather's layer or, without layer data, as
-// the deck seen here.
-void LearnDeck(const Aircraft& a, double alt_m, double vu, bool entering) {
-	if (!VerticalExit(a, vu)) return;
-	bool top = entering ? vu < 0 : vu > 0;  // descending into / climbing out of the top
-	if (!g_layers_real) {
-		if (top) g_seen_top = alt_m;
-		else g_seen_bot = alt_m;
-		if (g_seen_top > 0.0 && g_seen_bot > 0.0 && g_seen_bot >= g_seen_top) {
-			if (top) g_seen_bot = 0.0; else g_seen_top = 0.0;  // another deck: keep the new one
-		}
-		g_seen_lat = a.lat;
-		g_seen_lon = a.lon;
-		return;
-	}
-	int i = LayerAt(alt_m);
-	if (i < 0) return;
-	if (top) g_deck_top[i] = alt_m;
-	else g_deck_bot[i] = alt_m;
-}
-
 // Left a cloud (for longer than a short gap). Clouds further ahead than
 // kExitKeepTime of flight fade out at once, and so do the ones still above or
 // below us when we leave through the top or base. The ones close by stay
 // kExitNearDelay more, so we pass the last bits, then fade too. Meanwhile the
 // live density lets go (kDensHold, kDensRelease).
 void HandleExit(const Aircraft& a) {
-	LearnDeck(a, g_exit_alt, g_exit_vu, false);
 	bool vertical = VerticalExit(a, g_exit_vu);
 	double keep = fmax(150.0, a.speed * kExitKeepTime);
 	for (Puff& p : g_puffs) {
@@ -1077,7 +1060,6 @@ void Update() {
 	// to enter (well covered layers only; in a scattered layer a gap is as
 	// likely as a cloud). Entering early uses the density of the last cloud.
 	ReadLayers(a);
-	CheckLayersChanged();
 	g_layer_now = test ? -1 : LayerAt(a.alt_m);
 	// In the sim's cloud just outside the band: still that deck, so clouds
 	// stay inside it instead of appearing below or above us.
@@ -1091,10 +1073,9 @@ void Update() {
 	}
 	if (in_cloud) g_last_mix = g_mix;
 
-	// Entering and leaving cloud: learn the deck, and on a real exit (longer
-	// than a short gap) clear what no longer belongs.
+	// Leaving cloud: on a real exit (longer than a short gap) clear what no
+	// longer belongs.
 	if (!test) {
-		if (in_cloud && !g_was_cloudy && !g_exit_pending) LearnDeck(a, a.alt_m, a.vu, true);
 		if (!in_cloud && g_was_cloudy) {
 			g_exit_pending = true;
 			g_exit_time = a.time;
@@ -1103,14 +1084,6 @@ void Update() {
 		}
 		if (in_cloud) {
 			g_exit_pending = false;
-			int i = LayerAt(a.alt_m);  // in cloud beyond what was learned: widen it
-			if (g_layers_real) {
-				if (i >= 0 && g_deck_top[i] > 0.0 && a.alt_m > g_deck_top[i]) g_deck_top[i] = a.alt_m;
-				if (i >= 0 && g_deck_bot[i] > 0.0 && a.alt_m < g_deck_bot[i]) g_deck_bot[i] = a.alt_m;
-			} else {
-				if (g_seen_top > 0.0 && a.alt_m > g_seen_top) g_seen_top = a.alt_m;
-				if (g_seen_bot > 0.0 && a.alt_m < g_seen_bot) g_seen_bot = a.alt_m;
-			}
 		} else if (g_exit_pending && a.time - g_exit_time >= kExitHold) {
 			g_exit_pending = false;
 			HandleExit(a);
@@ -1184,17 +1157,16 @@ void Update() {
 			double shrink = (rising ? kLeadShrink : kLeadShrinkThin) * change;
 			double steep = fmin(0.35, 2.0 * fabs(a.vu) / fmax(1.0, a.speed));
 			double lead_far = fmax(g_cfg.lead_max * (1.0 - shrink) * (1.0 - steep), fmin(kLeadMin, g_cfg.lead_max));
-			double lead_near = fmin(kEntrySmall, lead_far);
+			double lead_wave = fmin(kEntryWave, lead_far);
 			lead_now = lead_far;
 			// First entry. The sim only reports the cloud we are in, not one
-			// ahead (density and AMBIENT IN CLOUD jump at the edge), so fill the
-			// whole space ahead at once: small clouds close by (sparser, so they
-			// pass right away), the big ones beyond. These first clouds fade in
-			// slower, as the cloud thickens.
+			// ahead (density and AMBIENT IN CLOUD jump at the edge), so as soon
+			// as we are in it: a wide, thin wall of small clouds at ~600 m first
+			// (see SpawnEntryWave), then the normal clouds beyond it. These
+			// first clouds fade in slower, as the cloud thickens.
 			if (live == 0 && a.time >= g_next_fill) {
-				for (double d = fmin(kEntryNear, lead_near); d < lead_near; d += spacing * 1.5)
-					SpawnStep(a, dens, d, spacing, kFadeInEntry, kEntrySmallSize);
-				for (double d = lead_near; d <= lead_far; d += spacing)
+				SpawnEntryWave(a, dens, lead_wave);
+				for (double d = lead_wave + 0.5 * kEntryWaveDepth + spacing; d <= lead_far; d += spacing)
 					SpawnStep(a, dens, d, spacing, kFadeInEntry);
 				g_lead = lead_far;
 				g_travel = 0.0;

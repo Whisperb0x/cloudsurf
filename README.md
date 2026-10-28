@@ -24,7 +24,8 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
    **Open the panel once after loading a flight**: it reads the cloud layers of
    the active weather, so CloudSurf knows where decks start and end even the
    first time you climb or descend through one. They stay known after you close
-   the panel. Without that, CloudSurf learns each deck as you fly through it.
+   the panel. Without that, CloudSurf only goes by being in cloud: clouds are
+   not kept inside a deck, and the colour is not lighter near its top.
 3. If another add-on also adds a wing fade or in-cloud effect, switch that off;
    otherwise you get both effects.
 
@@ -54,7 +55,8 @@ Clouds come in random sizes and orientations and come at you from far ahead,
 many of them, spread evenly through a box 100 m either side and 100 m above
 and below your path by default. They are a light grey lit by the sim's own
 light, darker the denser the cloud and the thicker the deck you are in (fitted
-to brightness chosen by hand in a calibration flight); the Brightness slider
+to brightness chosen by hand in a calibration flight), and lighter again in the
+upper part of the deck, where the sun comes through; the Brightness slider
 scales that. (Advanced has an
 experimental unlit look.) The
 wing fade is a stream of small cloud flakes flying along with the aircraft,
@@ -64,9 +66,11 @@ cloud you are in, with a slow gusty swing.
 Most of CloudSurf follows the sim on its own: when clouds start and stop,
 how thick, dark and many they are (the sim's cloud density), how close new
 clouds come (near cloud edges and in steep climbs or descents), staying inside
-the cloud layer (its real top and base are learned as you fly through them),
+the cloud layer of the current weather (150 m inside its top and base),
 which clouds stay or fade out when you leave a cloud, and the light from your
-aircraft.
+aircraft. As soon as you are in a cloud, a wide, thin wall of small clouds
+comes first, about 600 m ahead, then the normal clouds. Thin cloud (below 3 %
+of the sim's density) gets only a very light effect.
 
 **Calibrate** (under Advanced) tunes the look by hand per cloud density. While it is open its
 sliders act live (Auto FPS is off): cloud density, size, number of clouds,
