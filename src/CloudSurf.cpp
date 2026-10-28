@@ -110,7 +110,7 @@ struct ConfigVar { const char* name; double def; double Config::* field; };
 const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
 	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
-	{ "LEAD_MAX",   1200.0, &Config::lead_max },  // m ahead where new clouds appear (closer near edges)
+	{ "LEAD_MAX",   800.0, &Config::lead_max },   // m ahead where new clouds appear (closer near edges)
 	{ "LATERAL",    120.0, &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   50.0,  &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
@@ -125,7 +125,7 @@ const ConfigVar kConfigVars[] = {
 	{ "TEST_DENS",  1.0,   &Config::test_dens },  // their density 0..1
 	{ "EFFECT",     0.0,   &Config::effect },     // index into kEffects, -1 = Classic + wisps
 	{ "WING",       1.0,   &Config::wing },       // wing fade: cloud flakes streaming over the wings, 0 = off
-	{ "BEAM",       1.0,   &Config::beam },       // landing light beam effect on/off
+	{ "BEAM",       0.0,   &Config::beam },       // visible beam of mist (CloudSurfBeam) on/off; off: it pointed backwards, the landing lights light up the clouds themselves
 	{ "BEAM_FWD",   10.0,  &Config::beam_fwd },   // m ahead of the aircraft origin
 	{ "BEAM_UP",    -1.0,  &Config::beam_up },    // m above the aircraft origin
 	{ "BEAM_HDG",   1.0,   nullptr },             // cone axis heading, deg (read by the effect)
@@ -136,6 +136,8 @@ const ConfigVar kConfigVars[] = {
 const double kMinPct = 0.3;          // sim cloud density (%) below which no clouds come
 const double kMinSpeed = 25.0;       // m/s, no clouds below this
 const double kEntryNear = 200.0;     // m ahead, nearest cloud when entering a cloud
+const double kEntrySmall = 600.0;    // m ahead: entering a cloud, small clouds up to here, the big ones beyond
+const double kEntrySmallSize = 0.35; // their size, times the normal one
 const double kLeadMin = 500.0;       // m ahead new clouds appear at least, however the density changes
 const double kMinSpacing = 15.0;     // m flown per spawn step, at least
 const double kBehind = 100.0;        // m behind us a cloud is removed
@@ -200,7 +202,9 @@ const double kLayerMargin = 30.0;  // m the flight path may be outside its layer
 const double kNearLayer = 600.0;   // m
 // Clouds are placed with their centre from kDeckInBase above the base to
 // kDeckInTop below the top, so you fly right into them at the edge.
-const double kDeckInBase = 40.0, kDeckInTop = 50.0;
+// The weather's band is wider than the sim's visible cloud (seen: ~130 m at
+// the top and base), hence the wide margins.
+const double kDeckInBase = 200.0, kDeckInTop = 200.0;
 // Leaving through the top or base: climbing or descending at least this
 // steeply (vertical over total speed, ~2 degrees) and kVerticalExit m/s.
 const double kVerticalExit = 3.0, kVerticalExitSlope = 0.035;
@@ -570,7 +574,8 @@ int CloudCap();
 // lead: metres ahead along the flight path. fade_in: seconds the cloud takes
 // to appear (longer for the first clouds when entering a cloud). cell of
 // cells: which part of the box around the path it goes in (see SpawnStep).
-bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int cell = 0, int cells = 1) {
+bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int cell = 0, int cells = 1,
+               double size_k = 1.0) {
 	Puff* slot = nullptr;
 	int alive = 0;
 	for (Puff& p : g_puffs) {
@@ -599,7 +604,7 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 
 	// Small to big, mostly medium: 0.5..2.4 times SIZE.
 	double r = Rand01();
-	double size = (0.5 + 1.9 * pow(r, 1.4)) * g_cfg.size;
+	double size = (0.5 + 1.9 * pow(r, 1.4)) * g_cfg.size * size_k;
 	slot->half = kCloudHalfHeight * size;
 
 	double e = fe * lead + re * side;
@@ -749,12 +754,13 @@ void UpdateAutoFps(const Aircraft& a, double dt, bool active, int alive) {
 
 // One spawn step: CLUSTER clouds spread along the track, one in each cell of
 // the box around the path (see SpawnPuff).
-void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, double fade_in = kFadeInSpawn) {
+void SpawnStep(const Aircraft& a, double dens, double lead, double spacing, double fade_in = kFadeInSpawn,
+               double size_k = 1.0) {
 	int n = (int)g_cfg.cluster;
 	if (n < 1) n = 1;
 	if (n > 16) n = 16;
 	for (int i = 0; i < n; ++i)
-		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in, i, n);
+		SpawnPuff(a, dens, lead + (Rand01() - 0.5) * spacing, fade_in, i, n, size_k);
 }
 
 // Density 0..1 from the sim's cloud density at the aircraft: smoothed over
@@ -1137,15 +1143,16 @@ void Update() {
 			double shrink = (rising ? kLeadShrink : kLeadShrinkThin) * change;
 			double steep = fmin(0.35, 2.0 * fabs(a.vu) / fmax(1.0, a.speed));
 			double lead_far = fmax(g_cfg.lead_max * (1.0 - shrink) * (1.0 - steep), fmin(kLeadMin, g_cfg.lead_max));
-			double lead_near = 0.6 * lead_far;
+			double lead_near = fmin(kEntrySmall, lead_far);
 			lead_now = lead_far;
 			// First entry. The sim only reports the cloud we are in, not one
 			// ahead (density and AMBIENT IN CLOUD jump at the edge), so fill the
-			// whole space ahead at once, sparser close by so clouds pass right
-			// away. These first clouds fade in slower, as the cloud thickens.
+			// whole space ahead at once: small clouds close by (sparser, so they
+			// pass right away), the big ones beyond. These first clouds fade in
+			// slower, as the cloud thickens.
 			if (live == 0 && a.time >= g_next_fill) {
 				for (double d = fmin(kEntryNear, lead_near); d < lead_near; d += spacing * 1.5)
-					SpawnStep(a, dens, d, spacing, kFadeInEntry);
+					SpawnStep(a, dens, d, spacing, kFadeInEntry, kEntrySmallSize);
 				for (double d = lead_near; d <= lead_far; d += spacing)
 					SpawnStep(a, dens, d, spacing, kFadeInEntry);
 				g_lead = lead_far;

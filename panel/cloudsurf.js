@@ -12,16 +12,14 @@
 		["BRIGHT",       "Brightness (match the sim's cloud)", 0.2, 3, 0.05, 1.0, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 30, 0.05, 0.85, "x"],
-		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 1200, "m"],
+		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 800, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    120,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 50, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
 		["FULL_PCT",     "Sim density for full thickness", 3, 40, 1, 10, "%"],
 		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
-		["BEAM_FWD",     "Beam start ahead",      -10, 60, 1,   10,   "m"],
-		["BEAM_UP",      "Beam start height",     -10, 10, 0.5, -1,   "m"],
-		["BEAM_HDG",     "Beam direction (heading)", -180, 180, 1, 1, "deg"],
-		["BEAM_PITCH",   "Beam direction (pitch)", -90, 90, 1,  0,    "deg"],
+		["BEAM_HDG",     "Landing light direction (heading)", -180, 180, 1, 1, "deg"],
+		["BEAM_PITCH",   "Landing light direction (pitch)", -90, 90, 1,  0,    "deg"],
 	];
 	// Performance presets: how many clouds there are at once and per step.
 	// Auto lets the module pick the number (up to MAX_ALIVE) so the frame rate
@@ -35,7 +33,9 @@
 	};
 	const DEFAULT_PRESET = "auto";
 	// Settings without a control of their own (set by the presets).
-	const HIDDEN = [["AUTO", 1]];
+	// BEAM: the visible beam of mist stays off (it pointed backwards); the
+	// landing lights light up the clouds themselves.
+	const HIDDEN = [["AUTO", 1], ["BEAM", 0]];
 	// Effect labels, filled in by build.py in the same order as kEffects.
 	// L:CLOUDSURF_EFFECT is an index into it, or -1 for the mix (style Full).
 	const EFFECTS = /*@EFFECTS@*/[];
@@ -46,7 +46,6 @@
 	const TOGGLES = [
 		["ENABLE",   "csEnable",  1],
 		["TEST",     "csTest",    0],
-		["BEAM",     "csBeam",    1],
 		["LIT",      "csLit",     1],
 	];
 	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
@@ -86,6 +85,11 @@
 	if (!settings.__v4) {
 		["LIT", "LATERAL", "VERTICAL", "MULT", "MAX_ALIVE", "CLUSTER", "PRESET", "BRIGHT"].forEach(k => delete settings[k]);
 		settings.__v4 = true;
+	}
+	// v6: new clouds at 800 m, no beam of mist.
+	if (!settings.__v6) {
+		["LEAD_MAX", "BEAM", "BEAM_FWD", "BEAM_UP"].forEach(k => delete settings[k]);
+		settings.__v6 = true;
 	}
 	// v5: Auto FPS is the default.
 	if (!settings.__v5) {

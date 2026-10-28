@@ -5,8 +5,8 @@ inside a cloud, CloudSurf places small, soft clouds ahead of you at fixed spots
 in the world, so they come at you, sweep over the windows and wings, and fall
 behind. How many there are, how dense and how dark they look follows the sim's
 own cloud density and the time of day. At night, clouds near your strobes,
-beacon and landing lights glow, and the landing lights draw a beam into the
-cloud.
+beacon and landing lights glow: inside the landing lights' cone, the clouds
+light up.
 
 It works with any aircraft and any weather source (live weather, presets,
 ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
@@ -43,7 +43,6 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
-| Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
 many of them, spread evenly through a box 120 m either side and 50 m above
@@ -74,10 +73,10 @@ beyond them the nearest point holds. Without points the normal settings apply.
 
 **Advanced** shows what is automatic with live values, the few fixed
 settings (cloud style, including the experimental wisps made from cloud photo
-textures; distance ahead where new clouds appear, 1200 m and never closer than
+textures; distance ahead where new clouds appear, 800 m and never closer than
 500 m; sideways and vertical
-spread; clouds per step; sim density for full thickness, 10 %; beam position
-and direction) and debug tools (test mode, spawn and clear, live values, a log).
+spread; clouds per step; sim density for full thickness, 10 %; landing light
+direction) and debug tools (test mode, spawn and clear, live values, a log).
 
 All settings are `L:CLOUDSURF_*` variables, so other tools (MobiFlight,
 SPAD.neXt, …) can drive them too. See `kConfigVars` in `src/CloudSurf.cpp`.
@@ -100,7 +99,8 @@ SPAD.neXt, …) can drive them too. See `kConfigVars` in `src/CloudSurf.cpp`.
   with the wind.
 - **Light:** in MSFS, particles are not lit by aircraft lights (only the sim's
   own volumetric clouds and fog are). CloudSurf therefore makes the clouds glow
-  themselves, falling off with distance, and adds a separate beam effect.
+  themselves, falling off with distance. (A separate visible beam of mist is
+  in the code but off: it pointed the wrong way.)
 
 ## Build from source
 
@@ -135,7 +135,7 @@ Restart the sim. `python build.py --uninstall` removes it again.
 ## Contributing
 
 Ideas and pull requests are welcome. Good starting points: better textures,
-per-aircraft light positions, a softer beam, performance tuning (see
+per-aircraft light positions, a visible beam that points the right way, performance tuning (see
 `MAX_ALIVE`).
 
 ## License
