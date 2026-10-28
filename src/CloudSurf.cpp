@@ -842,10 +842,16 @@ double DeckThickness(double* bot_out = nullptr, double* top_out = nullptr) {
 // almost as light as thin cloud (the sun comes through from above): from
 // kTopFrom of the deck's height up to kTopFull, blended by up to kTopLift
 // towards the tone with only kTopDens of the density's darkening.
-// It follows all that smoothly. Leaving a cloud, out in the bright air, the
-// clouds still around turn light again (kToneBase) over kToneExit. Flight of
-// 28 Oct 2026 evening: the fit came out too grey (whiter clouds outside than
-// ours), hence the lower kTonePerPct and the thinner unknown deck.
+// In the lower part (below kBotFrom of its height) it gets darker, down to
+// kBotDark times at the base: the sim lights particles by sun and sky only,
+// not shaded by the cloud above them, so without this the base looks too
+// light.
+// It follows all that smoothly. Leaving a cloud, over kToneExit: out of the
+// top the clouds still around turn light (kToneBase); out of the base they
+// keep their tone (a deck seen from below is grey); out of the side they go
+// halfway. Flight of 28 Oct 2026 evening: the fit came out too grey (whiter
+// clouds outside than ours), hence the lower kTonePerPct and the thinner
+// unknown deck.
 // Unlit (experimental) the sim gives no light to go by, so the sun's
 // elevation (smoothly from night to day) comes in as well.
 // L:CLOUDSURF_VIS is how far away clouds start to fade in: far beyond where
@@ -856,7 +862,9 @@ const double kToneMaxPct = 15.0;   // the sim sometimes reports 100 %
 const double kToneSmooth = 2.0;    // s
 const double kToneExit = 1.0;      // s
 const double kTopFrom = 0.5, kTopFull = 0.9, kTopLift = 0.75, kTopDens = 0.35;
+const double kBotFrom = 0.3, kBotDark = 0.8;
 double g_auto_tone = -1.0;
+double g_tone_in = -1.0;  // tone in the last cloud
 
 void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 	double elev = SunElevation(a);
@@ -871,12 +879,18 @@ void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 			up = up * up * (3.0 - 2.0 * up);
 			double light = kToneBase * exp(-kTonePerPct * kTopDens * pct);
 			want += (light - want) * kTopLift * up;
+			double low = fmin(1.0, fmax(0.0, 1.0 - (a.alt_m - bot) / (top - bot) / kBotFrom));
+			want *= 1.0 - (1.0 - kBotDark) * low * low;
 		}
 		SetL("DECK_UP", up);
 		g_auto_tone = g_auto_tone < 0.0 ? want : g_auto_tone + (want - g_auto_tone) * fmin(1.0, dt / kToneSmooth);
+		g_tone_in = g_auto_tone;
 		SetL("DECK_KM", km);
-	} else if (g_auto_tone >= 0.0 && a.time - g_last_cloudy >= kExitHold) {  // a real exit, not a short gap
-		g_auto_tone += (kToneBase - g_auto_tone) * fmin(1.0, dt / kToneExit);
+	} else if (g_tone_in >= 0.0 && a.time - g_last_cloudy >= kExitHold) {  // a real exit, not a short gap
+		bool vertical = VerticalExit(a, g_exit_vu);
+		double share = !vertical ? 0.5 : g_exit_vu > 0.0 ? 1.0 : 0.0;  // side, top, base
+		double target = g_tone_in + (kToneBase - g_tone_in) * share;
+		g_auto_tone += (target - g_auto_tone) * fmin(1.0, dt / kToneExit);
 	}
 	double tone = g_cfg.bright * (g_auto_tone < 0.0 ? kToneBase : g_auto_tone);
 	if (g_cfg.lit < 0.5) {
