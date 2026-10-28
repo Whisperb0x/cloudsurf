@@ -42,7 +42,7 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
-| Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow (0 = off) |
+| Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
 | Landing light beam in cloud | on | beam of light in front of the aircraft, in cloud |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
@@ -64,7 +64,7 @@ aircraft.
 
 **Calibrate** tunes the look by hand per cloud density. While it is open its
 sliders act live (Auto FPS is off): cloud density, size, number of clouds,
-wing fade, brightness, how often new clouds come (every so many metres
+wing fade, brightness, glow from your lights (up to 30x), how often new clouds come (every so many metres
 flown), how far ahead they appear, standard clouds on/off, the share of wisps,
 and the sideways and vertical spread. Fly in a cloud, tune, and press
 **Confirm**: the values are stored for the sim's cloud density there (its

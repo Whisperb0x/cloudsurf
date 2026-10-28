@@ -11,7 +11,7 @@
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (match the sim's cloud)", 0.2, 3, 0.05, 1.0, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
-		["GLOW",         "Glow from aircraft lights", 0, 3, 0.05, 0.85, "x"],
+		["GLOW",         "Glow from aircraft lights", 0, 30, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 1200, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    120,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 50, "m"],
@@ -276,13 +276,14 @@
 	// sliders act live (LIVE_<key>).
 	const CAL_KEY = "CloudSurfCal1";
 	const CAL_KEYS = ["DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
-	                  "CLASSIC", "WISPS", "LATERAL", "VERTICAL"];
+	                  "CLASSIC", "WISPS", "LATERAL", "VERTICAL", "GLOW"];
 	const CAL_SLIDERS = [
 		["DENS",     "Cloud density",           0,   2,    0.05, "x"],
 		["SIZE",     "Cloud size",              0.5, 2.5,  0.05, "x"],
 		["COUNT",    "Number of clouds",        10,  128,  1,    ""],
 		["WING",     "Wing fade",               0,   2,    0.05, "x"],
 		["BRIGHT",   "Brightness (light/dark)", 0.2, 3,    0.05, "x"],
+		["GLOW",     "Glow from your lights",   0,   30,   0.05, "x"],
 		["SPACING",  "New clouds every",        10,  400,  5,    "m"],
 		["LEAD",     "Spawn distance ahead",    200, 2500, 10,   "m"],
 		["WISPS",    "Wisps (atlas) share",     0,   1,    0.05, ""],
@@ -297,7 +298,7 @@
 	function sendCal() {
 		calPoints.forEach((p, i) => {
 			setL(`CAL${i + 1}_PCT`, p.pct);
-			CAL_KEYS.forEach(k => setL(`CAL${i + 1}_${k}`, p[k]));
+			CAL_KEYS.forEach(k => setL(`CAL${i + 1}_${k}`, k in p ? p[k] : valueOf(k)));  // older points: the normal value
 		});
 		setL("CAL_N", calPoints.length);
 		setL("CAL_VER", Date.now() % 1000000000);
@@ -360,6 +361,8 @@
 		log(`calibrate: ${old >= 0 ? "replaced" : "stored"} the point for ${point.pct.toFixed(1)} %`);
 	}
 
+	const glowOf = p => ("GLOW" in p ? p.GLOW : valueOf("GLOW"));
+
 	function renderCalList() {
 		const box = $("csCalList");
 		if (!box) return;
@@ -373,7 +376,7 @@
 			row.className = "cs-cal-row";
 			row.innerHTML =
 				`<span>${p.pct.toFixed(1)} %: density ${fmt(p.DENS, 0.01)}, size ${fmt(p.SIZE, 0.01)}, ` +
-				`${p.COUNT} clouds, every ${p.SPACING} m, ${p.LEAD} m ahead</span>` +
+				`${p.COUNT} clouds, every ${p.SPACING} m, ${p.LEAD} m ahead, glow ${fmt(glowOf(p), 0.01)}</span>` +
 				`<button class="cs-btn" data-load="${i}">Load</button><button class="cs-btn" data-del="${i}">Delete</button>`;
 			box.appendChild(row);
 		});

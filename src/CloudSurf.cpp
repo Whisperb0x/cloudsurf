@@ -36,7 +36,8 @@ const int kEffectCount = sizeof(kEffects) / sizeof(kEffects[0]);
 // (BeamX/Y/Z) in its own frame (x right, y up, z along its spawn heading) as
 // RPN that the sim evaluates every frame; the effect then measures every
 // particle against them, so only the part of a cloud inside the beam or near
-// the aircraft lights up. Light strengths, all scaled by L:CLOUDSURF_GLOW:
+// the aircraft lights up. Light strengths, all scaled by L:CLOUDSURF_GLOW_NOW
+// (the Glow setting or its calibrated value):
 // landing lights (LandingGlow), and the lights on the aircraft, which share
 // one falloff: Airbus-style double strobe and wing lights in white
 // (NearWhite), beacon pulse and left nav light in red (NearRed), right nav
@@ -44,10 +45,10 @@ const int kEffectCount = sizeof(kEffects) / sizeof(kEffects[0]);
 const char* kNearWhiteRpn =
 	"(A:LIGHT STROBE, bool) (E:ABSOLUTE TIME, seconds) 1 % 0.06 < "
 	"(E:ABSOLUTE TIME, seconds) 1 % 0.14 > (E:ABSOLUTE TIME, seconds) 1 % 0.2 < and or and 4 * "
-	"(A:LIGHT WING, bool) 0.8 * + (L:CLOUDSURF_GLOW, number) *";
+	"(A:LIGHT WING, bool) 0.8 * + (L:CLOUDSURF_GLOW_NOW, number) *";
 const char* kBeaconRpn =
 	"(A:LIGHT BEACON, bool) (E:ABSOLUTE TIME, seconds) 1.2 % 0.15 < and 2.5 *";
-const char* kLandingRpn = "(A:LIGHT LANDING, bool) 1.6 * (L:CLOUDSURF_GLOW, number) *";
+const char* kLandingRpn = "(A:LIGHT LANDING, bool) 1.6 * (L:CLOUDSURF_GLOW_NOW, number) *";
 
 // Opacity by time of day (E:TIME OF DAY: 0 dawn, 1 day, 2 dusk, 3 night); the
 // brightness is L:CLOUDSURF_TONE, see CloudTone.
@@ -117,7 +118,7 @@ const ConfigVar kConfigVars[] = {
 	{ "MULT",       2.0,   &Config::mult },       // thickness
 	{ "CLUSTER",    8.0,   &Config::cluster },    // clouds per spawn step
 	{ "SIZE",       1.65,  &Config::size },       // cloud size
-	{ "GLOW",       0.85,  &Config::glow },       // glow from aircraft lights (read by the effect's RPN)
+	{ "GLOW",       0.85,  &Config::glow },       // glow from aircraft lights (the effect reads it as GLOW_NOW)
 	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, to match the sim's fog
 	{ "LIT",        1.0,   &Config::lit },        // 1 = lit by the sim's light (it decides how dark), 0 = unlit (experimental)
 	{ "TEST",       0.0,   &Config::test },       // 1 = test clouds in clear sky
@@ -425,7 +426,7 @@ const char* kBeamRpn =
 	"(A:LIGHT LANDING, bool) (L:CLOUDSURF_FADE, number) * "
 	"(A:GROUND VELOCITY, meters per second) 25 > * "
 	"(E:TIME OF DAY, enum) 3 == 0.7 * (E:TIME OF DAY, enum) 0 == (E:TIME OF DAY, enum) 2 == or 0.4 * + 0.3 + * "
-	"(L:CLOUDSURF_GLOW, number) *";
+	"(L:CLOUDSURF_GLOW_NOW, number) *";
 FsVfxId g_beam_id = (FsVfxId)FSVFXID_NULL;
 
 int BeamEffect() {
@@ -528,9 +529,9 @@ int CurrentEffect() {
 // calibrating, the normal settings and curves apply. CAL_INT_<key> shows what
 // the points (or the normal settings) give here, for the panel to start from.
 enum { CK_DENS, CK_SIZE, CK_COUNT, CK_WING, CK_BRIGHT, CK_SPACING, CK_LEAD,
-       CK_CLASSIC, CK_WISPS, CK_LATERAL, CK_VERTICAL, CK_N };
+       CK_CLASSIC, CK_WISPS, CK_LATERAL, CK_VERTICAL, CK_GLOW, CK_N };
 const char* const kCalKeys[CK_N] = { "DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
-                                     "CLASSIC", "WISPS", "LATERAL", "VERTICAL" };
+                                     "CLASSIC", "WISPS", "LATERAL", "VERTICAL", "GLOW" };
 const int kMaxCal = 16;
 struct CalPoint { double pct; double v[CK_N]; };
 CalPoint g_cal[kMaxCal];
@@ -653,9 +654,9 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 		char side_rpn[300];
 		SideRpn(side_rpn, sizeof(side_rpn), slot->lat, slot->lon);
 		snprintf(slot->near_red, sizeof(slot->near_red),
-		         "%s (A:LIGHT NAV, bool) 1.2 * %s 0 < * + (L:CLOUDSURF_GLOW, number) *", kBeaconRpn, side_rpn);
+		         "%s (A:LIGHT NAV, bool) 1.2 * %s 0 < * + (L:CLOUDSURF_GLOW_NOW, number) *", kBeaconRpn, side_rpn);
 		snprintf(slot->near_green, sizeof(slot->near_green),
-		         "(A:LIGHT NAV, bool) 1.2 * %s 0 > * (L:CLOUDSURF_GLOW, number) *", side_rpn);
+		         "(A:LIGHT NAV, bool) 1.2 * %s 0 > * (L:CLOUDSURF_GLOW_NOW, number) *", side_rpn);
 		params[nparams++] = { "CloudDensity", slot->dens };
 		params[nparams++] = { "CloudSize", slot->size };
 		params[nparams++] = { "CloudTone", "(L:CLOUDSURF_TONE, number)" };
@@ -884,6 +885,7 @@ double Calibrate(double dens, double now) {
 	normal[CK_WISPS] = fx == 1 ? 1.0 : fx < 0 ? kWispShare * (1.0 - thick) : 0.0;
 	normal[CK_LATERAL] = g_cfg.lateral;
 	normal[CK_VERTICAL] = g_cfg.vertical;
+	normal[CK_GLOW] = g_cfg.glow;
 
 	double here[CK_N];
 	for (int k = 0; k < CK_N; ++k) here[k] = normal[k];
@@ -909,6 +911,7 @@ double Calibrate(double dens, double now) {
 	g_cal_on = live || g_cal_n > 0;
 	if (!g_cal_on) {
 		SetL("WING_NOW", g_cfg.wing);
+		SetL("GLOW_NOW", g_cfg.glow);
 		return dens;
 	}
 	for (int k = 0; k < CK_N; ++k) {
@@ -923,8 +926,10 @@ double Calibrate(double dens, double now) {
 	g_cfg.lead_max = fmax(100.0, g_calv[CK_LEAD]);
 	g_cfg.lateral = g_calv[CK_LATERAL];
 	g_cfg.vertical = g_calv[CK_VERTICAL];
+	g_cfg.glow = fmax(0.0, g_calv[CK_GLOW]);
 	if (live) g_cfg.autofps = 0.0;  // while calibrating, exactly the number set
 	SetL("WING_NOW", g_cfg.wing);
+	SetL("GLOW_NOW", g_cfg.glow);
 	return g_smooth >= kMinPct ? fmin(2.0, fmax(0.0, g_calv[CK_DENS])) : 0.0;
 }
 
