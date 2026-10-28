@@ -665,9 +665,12 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 // the frame rate just before it (the baseline, measured while there are no
 // clouds of ours). Too slow: fewer clouds, and the farthest ones ahead fade
 // out; fast enough with all of them in use: a few more. What it found is
-// kept for the next cloud.
+// kept for the next cloud. It never goes below kAutoMin (as many as the
+// Performance preset): flight of 28 Oct 2026 evening, the sim's own cloud
+// took ~8 % of the frame rate on its own and Auto cut ours to 15..27, too few
+// for the clouds around you; that drop is not ours to fix.
 const double kAutoDrop = 0.10;      // the frame rate may drop at most this share
-const double kAutoMin = 15.0;       // clouds at least
+const double kAutoMin = 35.0;       // clouds at least
 const double kAutoStart = 60.0;     // clouds in the first cloud of a flight
 const double kAutoStep = 1.5;       // s between adjustments
 const double kAutoSettle = 2.0;     // s after entering a cloud before the first one
@@ -699,7 +702,7 @@ void UpdateAutoFps(const Aircraft& a, double dt, bool active, int alive) {
 			g_fps_base = g_fps;
 			g_at_min = 0;
 		} else if (ratio < 1.0 - kAutoDrop) {
-			g_cap = fmax(kAutoMin, g_cap * 0.85);
+			g_cap = fmax(kAutoMin, g_cap * 0.9);
 			// fade out the farthest clouds ahead until there are no more than the cap
 			for (int n = alive - CloudCap(); n > 0; --n) {
 				Puff* far = nullptr;
