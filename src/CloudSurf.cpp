@@ -119,7 +119,7 @@ const ConfigVar kConfigVars[] = {
 	{ "CLUSTER",    8.0,   &Config::cluster },    // clouds per spawn step
 	{ "SIZE",       1.65,  &Config::size },       // cloud size
 	{ "GLOW",       0.85,  &Config::glow },       // glow from aircraft lights (the effect reads it as GLOW_NOW)
-	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, to match the sim's fog
+	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, times the automatic one (see UpdateTone)
 	{ "LIT",        1.0,   &Config::lit },        // 1 = lit by the sim's light (it decides how dark), 0 = unlit (experimental)
 	{ "TEST",       0.0,   &Config::test },       // 1 = test clouds in clear sky
 	{ "TEST_DENS",  1.0,   &Config::test_dens },  // their density 0..1
@@ -811,17 +811,55 @@ double SunElevation(const Aircraft& a) {
 	return asin(fmin(1.0, fmax(-1.0, s))) * kDeg;
 }
 
-// L:CLOUDSURF_TONE, the brightness of the clouds. Lit (the default), the
-// sim's own light decides how dark they are, so this is just the Brightness
-// slider. Unlit (experimental) the sim gives no light to go by, so it is made
-// from the sun's elevation (smoothly from night to day) as well.
+// Thickness of the cloud deck we fly in, in metres: the weather's layer (with
+// the layers overlapping it), else the deck seen in this flight, else
+// kDeckUnknown.
+const double kDeckUnknown = 2000.0;
+
+double DeckThickness() {
+	if (g_layer_now >= 0 && g_layers_real) {
+		double bot = g_layers[g_layer_now].bot_m, top = g_layers[g_layer_now].top_m;
+		for (bool grew = true; grew;) {
+			grew = false;
+			for (int i = 0; i < g_layer_count; ++i) {
+				const Layer& l = g_layers[i];
+				if (l.top_m < bot || l.bot_m > top || (l.bot_m >= bot && l.top_m <= top)) continue;
+				bot = fmin(bot, l.bot_m);
+				top = fmax(top, l.top_m);
+				grew = true;
+			}
+		}
+		return top - bot;
+	}
+	if (g_seen_top > 0.0 && g_seen_bot > 0.0) return g_seen_top - g_seen_bot;
+	return kDeckUnknown;
+}
+
+// L:CLOUDSURF_TONE, the brightness of the clouds, times the Brightness slider.
+// Lit (the default) the sim's light shades them on top of this. From the
+// calibration flight of 28 Oct 2026 (brightness chosen by hand in 9 weathers):
+// darker the denser the cloud (the main thing) and the thicker the deck,
+// kToneBase * exp(-kTonePerPct * density% - kTonePerKm * deck km), at least
+// kToneMin. It follows the density smoothly and holds after leaving a cloud.
+// Unlit (experimental) the sim gives no light to go by, so the sun's
+// elevation (smoothly from night to day) comes in as well.
 // L:CLOUDSURF_VIS is how far away clouds start to fade in: far beyond where
 // they appear, so they come at you from far, as before.
 const double kVisFar = 5000.0;  // m
+const double kToneBase = 0.94, kTonePerPct = 0.132, kTonePerKm = 0.06, kToneMin = 0.15;
+const double kToneMaxPct = 15.0;   // the sim sometimes reports 100 %
+const double kToneSmooth = 2.0;    // s
+double g_auto_tone = -1.0;
 
-void UpdateTone(const Aircraft& a) {
+void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 	double elev = SunElevation(a);
-	double tone = g_cfg.bright;
+	if (in_cloud && g_smooth >= kMinPct) {
+		double km = DeckThickness() / 1000.0;
+		double want = fmax(kToneMin, kToneBase * exp(-kTonePerPct * fmin(kToneMaxPct, g_smooth) - kTonePerKm * km));
+		g_auto_tone = g_auto_tone < 0.0 ? want : g_auto_tone + (want - g_auto_tone) * fmin(1.0, dt / kToneSmooth);
+		SetL("DECK_KM", km);
+	}
+	double tone = g_cfg.bright * (g_auto_tone < 0.0 ? kToneBase : g_auto_tone);
 	if (g_cfg.lit < 0.5) {
 		double day = fmin(1.0, fmax(0.0, (elev + 6.0) / 18.0));  // 0 at -6 deg, 1 at +12 deg
 		tone *= 0.04 + 0.96 * day * day * (3.0 - 2.0 * day);
@@ -1088,7 +1126,7 @@ void Update() {
 	else if (active) g_dens_live = dens;
 	else if (a.time - g_last_active > kDensHold) g_dens_live = fmax(0.0, g_dens_live - dt * g_dens_live / kDensRelease - dt * 0.05);
 	SetL("DENS_LIVE", g_dens_live);
-	UpdateTone(a);
+	UpdateTone(a, dt, in_cloud || test);
 
 	// L:CLOUDSURF_FADE: being in cloud, smoothed; the landing light beam
 	// follows it.

@@ -1,0 +1,32 @@
+[
+ {
+  "pct": 4.53,
+  "DENS": 0.05,
+  "SIZE": 1.65,
+  "COUNT": 88.0,
+  "WING": 1.0,
+  "BRIGHT": 0.35,
+  "SPACING": 180.0,
+  "LEAD": 1200.0,
+  "CLASSIC": 1.0,
+  "WISPS": 0.0,
+  "LATERAL": 120.0,
+  "VERTICAL": 50.0,
+  "GLOW": 4.55
+ },
+ {
+  "pct": 8.83,
+  "DENS": 0.05,
+  "SIZE": 1.65,
+  "COUNT": 88.0,
+  "WING": 1.0,
+  "BRIGHT": 0.25,
+  "SPACING": 180.0,
+  "LEAD": 1200.0,
+  "CLASSIC": 1.0,
+  "WISPS": 0.0,
+  "LATERAL": 120.0,
+  "VERTICAL": 50.0,
+  "GLOW": 4.55
+ }
+]

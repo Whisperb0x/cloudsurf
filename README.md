@@ -40,15 +40,16 @@ clouds are around you, leaving cloud, clear air, paused) and a few controls:
 | Clouds around you | 128 | how many clouds exist at once (with Auto: at most); moving it makes the preset "custom" (Auto off) |
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
-| Brightness | 1.0x | cloud brightness, to match the sim's own cloud around you |
+| Brightness | 1.0x | cloud brightness, times the automatic brightness (darker in denser cloud and thicker decks) |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
 | Glow from aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
 
 Clouds come in random sizes and orientations and come at you from far ahead,
 many of them, spread evenly through a box 120 m either side and 50 m above
-and below your path by default. They are a neutral light
-grey lit by the sim's own light, so the sim decides how dark they are; the
-Brightness slider matches them to the sim's cloud. (Advanced has an
+and below your path by default. They are a light grey lit by the sim's own
+light, darker the denser the cloud and the thicker the deck you are in (fitted
+to brightness chosen by hand in a calibration flight); the Brightness slider
+scales that. (Advanced has an
 experimental unlit look.) The
 wing fade is a stream of small cloud flakes flying along with the aircraft,
 sent backwards over the wings in a 3 m tube, as many and as dense as the

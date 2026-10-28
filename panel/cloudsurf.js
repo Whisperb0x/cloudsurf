@@ -9,7 +9,7 @@
 		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
-		["BRIGHT",       "Brightness (match the sim's cloud)", 0.2, 3, 0.05, 1.0, "x"],
+		["BRIGHT",       "Brightness (times the automatic one)", 0.2, 3, 0.05, 1.0, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["GLOW",         "Glow from aircraft lights", 0, 30, 0.05, 0.85, "x"],
 		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 800, "m"],
@@ -278,7 +278,9 @@
 	// and sent as L:CLOUDSURF_CAL_N, CAL<i>_PCT, CAL<i>_<key> and CAL_VER.
 	// While the Calibrate box is open L:CLOUDSURF_CAL_MODE is 1 and the
 	// sliders act live (LIVE_<key>).
-	const CAL_KEY = "CloudSurfCal1";
+	// Cal1 held absolute brightness; since then brightness is automatic and
+	// the calibrated value multiplies it, so those points are not used.
+	const CAL_KEY = "CloudSurfCal2";
 	const CAL_KEYS = ["DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
 	                  "CLASSIC", "WISPS", "LATERAL", "VERTICAL", "GLOW"];
 	const CAL_SLIDERS = [
@@ -286,7 +288,7 @@
 		["SIZE",     "Cloud size",              0.5, 2.5,  0.05, "x"],
 		["COUNT",    "Number of clouds",        10,  128,  1,    ""],
 		["WING",     "Wing fade",               0,   2,    0.05, "x"],
-		["BRIGHT",   "Brightness (light/dark)", 0.2, 3,    0.05, "x"],
+		["BRIGHT",   "Brightness (times the automatic one)", 0.2, 3, 0.05, "x"],
 		["GLOW",     "Glow from your lights",   0,   30,   0.05, "x"],
 		["SPACING",  "New clouds every",        10,  400,  5,    "m"],
 		["LEAD",     "Spawn distance ahead",    200, 2500, 10,   "m"],
