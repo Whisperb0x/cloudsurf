@@ -406,8 +406,10 @@ bool VerticalExit(const Aircraft& a, double vu) {
 // Landing light beam (CloudSurfBeam), attached to the user aircraft. The sim
 // evaluates its parameters every frame: strength from the landing lights,
 // being in cloud (L:CLOUDSURF_FADE) and darkness; cone direction from two L:vars for tuning.
+// Off below kMinSpeed like the clouds, so ground fog at the gate shows no beam.
 const char* kBeamRpn =
 	"(A:LIGHT LANDING, bool) (L:CLOUDSURF_FADE, number) * "
+	"(A:GROUND VELOCITY, meters per second) 25 > * "
 	"(E:TIME OF DAY, enum) 3 == 0.7 * (E:TIME OF DAY, enum) 0 == (E:TIME OF DAY, enum) 2 == or 0.4 * + 0.3 + * "
 	"(L:CLOUDSURF_GLOW, number) *";
 FsVfxId g_beam_id = (FsVfxId)FSVFXID_NULL;
