@@ -462,17 +462,17 @@ void UpdateBeam() {
 // stream that flies along and sends small cloud flakes backwards over the
 // wings (see tools/make_cloud_vfx.py). How many and how dense follow the live
 // cloud density (L:CLOUDSURF_DENS_LIVE) and the Wing fade slider
-// (L:CLOUDSURF_WING), the density with a slow gusty swing so the wing fades in
+// (L:CLOUDSURF_WING_NOW, or its calibrated value), the density with a slow gusty swing so the wing fades in
 // and out; outside cloud there are none.
 const double kWingAhead = 35.0;     // m in front of the aircraft origin
 FsVfxId g_wing_id = (FsVfxId)FSVFXID_NULL;
 char g_wing_half[24];
 const char* kWingRateRpn =
-	"(L:CLOUDSURF_WING, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * 70 *";
+	"(L:CLOUDSURF_WING_NOW, number) (L:CLOUDSURF_DENS_LIVE, number) 1 min * 70 *";
 const char* kWingAlphaRpn =
 	"(L:CLOUDSURF_DENS_LIVE, number) 0.7 * "
 	"(E:SIMULATION TIME, seconds) 0.9 * sin (E:SIMULATION TIME, seconds) 2.3 * sin + 0.15 * 0.8 + * "
-	"(L:CLOUDSURF_WING, number) * 0 max 0.95 min";
+	"(L:CLOUDSURF_WING_NOW, number) * 0 max 0.95 min";
 
 int WingEffect() {
 	for (int i = 0; i < kEffectCount; ++i)
@@ -520,13 +520,42 @@ int CurrentEffect() {
 	return i >= 0 && i < kSelectableEffects ? i : -1;
 }
 
+// Calibration: the look tuned by hand per sim cloud density. The panel sends
+// points (L:CLOUDSURF_CAL_N, CAL<i>_PCT and CAL<i>_<key>, re-read when
+// CAL_VER changes); between them the values are interpolated by the density
+// here (g_smooth), beyond them the nearest point holds. While calibrating
+// (CAL_MODE) the live values LIVE_<key> are used instead. Without points or
+// calibrating, the normal settings and curves apply. CAL_INT_<key> shows what
+// the points (or the normal settings) give here, for the panel to start from.
+enum { CK_DENS, CK_SIZE, CK_COUNT, CK_WING, CK_BRIGHT, CK_SPACING, CK_LEAD,
+       CK_CLASSIC, CK_WISPS, CK_LATERAL, CK_VERTICAL, CK_N };
+const char* const kCalKeys[CK_N] = { "DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
+                                     "CLASSIC", "WISPS", "LATERAL", "VERTICAL" };
+const int kMaxCal = 16;
+struct CalPoint { double pct; double v[CK_N]; };
+CalPoint g_cal[kMaxCal];
+int g_cal_n = 0;
+double g_cal_ver = -1.0;
+bool g_cal_on = false;              // calibrated values in use this frame
+double g_calv[CK_N];                // the values in use
+
 // Style Classic + wisps (experimental): the big clouds (CloudSurf, kEffects[0]) lead; light wisps
 // (CloudSurfWisps, kEffects[1]) are mixed in as an accent, at most kWispShare
 // of the clouds below kMixLo and none above kMixHi. mix is the sim's cloud
 // density on the 0..1 curve, before MULT.
 const double kWispShare = 0.35;
 
+// The effect for a new cloud, or -1 for none.
 int PickEffect(double mix) {
+	if (g_cal_on) {
+		// standard clouds on/off, wisps as a share of them (all wisps when the
+		// standard ones are off)
+		bool classic = g_calv[CK_CLASSIC] >= 0.5;
+		double wisps = g_calv[CK_WISPS];
+		if (kSelectableEffects < 2) return classic ? 0 : -1;
+		if (!classic) return wisps > 0.01 ? 1 : -1;
+		return Rand01() < wisps ? 1 : 0;
+	}
 	int fx = CurrentEffect();
 	if (fx >= 0) return fx;
 	if (kSelectableEffects < 2) return 0;
@@ -595,7 +624,9 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	// Each cloud follows the density around us all its life (L:CLOUDSURF_DENS_LIVE,
 	// see Update), times its own factor: thin ones mixed with thicker ones.
 	double factor = 1.0 - kDensVar * Rand01();
-	const Effect& fx = kEffects[PickEffect(g_mix)];
+	int fx_index = PickEffect(g_mix);
+	if (fx_index < 0) return false;
+	const Effect& fx = kEffects[fx_index];
 	FsVfxGraphParam params[20];
 	int nparams = 0;
 	if (fx.kind == FX_CLOUDSURF) {
@@ -798,11 +829,103 @@ void UpdateTone(const Aircraft& a) {
 // clouds follow each other without gaps. Thinner cloud, as towards its edge,
 // gets fewer clouds (up to 2.5x the distance).
 double DensitySpacing(double dens) {
+	if (g_cal_on) return fmax(kMinSpacing, g_calv[CK_SPACING]);
 	double cluster = fmin(16.0, fmax(1.0, g_cfg.cluster));
 	double stretch = fmax(50.0, g_cfg.lead_max + kBehind);
 	double even = stretch * cluster / fmax(1.0, (double)CloudCap());
 	double spacing = fmax(kMinSpacing, even);
 	return spacing / (0.4 + 0.6 * fmin(1.0, dens));
+}
+
+void ReadCalibration() {
+	double ver = GetL("CAL_VER");
+	if (ver == g_cal_ver) return;
+	g_cal_ver = ver;
+	g_cal_n = 0;
+	int n = (int)GetL("CAL_N");
+	for (int i = 0; i < n && i < kMaxCal; ++i) {
+		char name[40];
+		CalPoint& c = g_cal[g_cal_n];
+		snprintf(name, sizeof(name), "CAL%d_PCT", i + 1);
+		c.pct = GetL(name);
+		for (int k = 0; k < CK_N; ++k) {
+			snprintf(name, sizeof(name), "CAL%d_%s", i + 1, kCalKeys[k]);
+			c.v[k] = GetL(name);
+		}
+		// keep them sorted by density
+		int j = g_cal_n++;
+		while (j > 0 && g_cal[j - 1].pct > g_cal[j].pct) {
+			CalPoint t = g_cal[j]; g_cal[j] = g_cal[j - 1]; g_cal[j - 1] = t;
+			--j;
+		}
+	}
+}
+
+// Calibrated values for the density here (see CalPoint): sets g_calv and
+// g_cal_on, puts them in place of the normal settings, and returns the cloud
+// density to use (dens: what the normal curve gives).
+double g_next_cal_out = 0.0;
+
+double Calibrate(double dens, double now) {
+	ReadCalibration();
+	g_cal_on = false;  // the normal values below, not last frame's calibrated ones
+	double normal[CK_N];
+	int fx = CurrentEffect();
+	double span = fmax(0.05, kMixHi - kMixLo);
+	double thick = fmin(1.0, fmax(0.0, (g_mix - kMixLo) / span));
+	normal[CK_DENS] = dens;
+	normal[CK_SIZE] = g_cfg.size;
+	normal[CK_COUNT] = g_cfg.max_alive;
+	normal[CK_WING] = g_cfg.wing;
+	normal[CK_BRIGHT] = g_cfg.bright;
+	normal[CK_SPACING] = DensitySpacing(dens);
+	normal[CK_LEAD] = g_cfg.lead_max;
+	normal[CK_CLASSIC] = fx == 1 ? 0.0 : 1.0;
+	normal[CK_WISPS] = fx == 1 ? 1.0 : fx < 0 ? kWispShare * (1.0 - thick) : 0.0;
+	normal[CK_LATERAL] = g_cfg.lateral;
+	normal[CK_VERTICAL] = g_cfg.vertical;
+
+	double here[CK_N];
+	for (int k = 0; k < CK_N; ++k) here[k] = normal[k];
+	if (g_cal_n > 0) {
+		int hi = 0;
+		while (hi < g_cal_n && g_cal[hi].pct < g_smooth) ++hi;
+		const CalPoint& p0 = g_cal[hi == 0 ? 0 : hi - 1];
+		const CalPoint& p1 = g_cal[hi == g_cal_n ? g_cal_n - 1 : hi];
+		double t = p1.pct > p0.pct ? fmin(1.0, fmax(0.0, (g_smooth - p0.pct) / (p1.pct - p0.pct))) : 0.0;
+		for (int k = 0; k < CK_N; ++k) here[k] = p0.v[k] + (p1.v[k] - p0.v[k]) * t;
+	}
+	if (now >= g_next_cal_out || now < g_next_cal_out - 1.0) {  // for the panel, 4 times a second
+		g_next_cal_out = now + 0.25;
+		for (int k = 0; k < CK_N; ++k) {
+			char name[32];
+			snprintf(name, sizeof(name), "CAL_INT_%s", kCalKeys[k]);
+			SetL(name, here[k]);
+		}
+	}
+	SetL("PCT", g_smooth);
+
+	bool live = GetL("CAL_MODE") > 0.5;
+	g_cal_on = live || g_cal_n > 0;
+	if (!g_cal_on) {
+		SetL("WING_NOW", g_cfg.wing);
+		return dens;
+	}
+	for (int k = 0; k < CK_N; ++k) {
+		char name[32];
+		snprintf(name, sizeof(name), "LIVE_%s", kCalKeys[k]);
+		g_calv[k] = live ? GetL(name) : here[k];
+	}
+	g_cfg.size = g_calv[CK_SIZE];
+	g_cfg.max_alive = fmin((double)kMaxPuffs, fmax(1.0, g_calv[CK_COUNT]));
+	g_cfg.wing = g_calv[CK_WING];
+	g_cfg.bright = g_calv[CK_BRIGHT];
+	g_cfg.lead_max = fmax(100.0, g_calv[CK_LEAD]);
+	g_cfg.lateral = g_calv[CK_LATERAL];
+	g_cfg.vertical = g_calv[CK_VERTICAL];
+	if (live) g_cfg.autofps = 0.0;  // while calibrating, exactly the number set
+	SetL("WING_NOW", g_cfg.wing);
+	return g_smooth >= kMinPct ? fmin(2.0, fmax(0.0, g_calv[CK_DENS])) : 0.0;
 }
 
 // Learn the real deck from crossing its top or base while climbing or
@@ -867,10 +990,10 @@ void Update() {
 		return;
 	}
 	if (dt == 0.0) return;  // paused
+
+	double dens = Calibrate(CloudDens(a, dt), a.time);
 	UpdateBeam();
 	UpdateWing(a);
-
-	double dens = CloudDens(a, dt);
 	bool rising = false;
 	double change = DensityChange(a, dt, &rising);
 	if (a.camera == 2.0) dens *= kCockpitMult;

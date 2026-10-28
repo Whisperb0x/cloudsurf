@@ -93,3 +93,11 @@
 	font-size: 0.8em;
 	white-space: pre-wrap;
 }
+
+/* calibrate */
+.cs-hint { margin: 2px 2px 8px 2px; font-size: 12px; color: #b8c4cf; }
+.cs-btn-main { background: #6c63ff; border-color: #6c63ff; color: #ffffff; }
+.cs-btn-main:hover { background: #7f77ff; }
+.cs-cal-row { display: flex; align-items: center; margin: 3px 0; font-size: 12px; color: #d6dee6; }
+.cs-cal-row span { flex: 1; }
+.cs-cal-row .cs-btn { margin: 0 0 0 6px; padding: 3px 8px; }

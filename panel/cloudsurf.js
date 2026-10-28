@@ -64,20 +64,20 @@
 
 	// The sim's own storage (dataStorage.js) survives a restart; localStorage
 	// in the panel did not, so it is only a fallback.
-	function loadSettings() {
+	function loadStored(key) {
 		const sources = [
-			() => typeof GetStoredData === "function" ? GetStoredData(STORE_KEY) : null,
-			() => localStorage.getItem(STORE_KEY),
+			() => typeof GetStoredData === "function" ? GetStoredData(key) : null,
+			() => localStorage.getItem(key),
 		];
 		for (const get of sources) {
 			try {
 				const raw = get();
-				if (raw) return JSON.parse(raw) || {};
+				if (raw) return JSON.parse(raw);
 			} catch (e) {}
 		}
-		return {};
+		return null;
 	}
-	let settings = loadSettings();
+	let settings = loadStored(STORE_KEY) || {};
 	// 800 m was the old default distance; it is 1200 m now.
 	if (settings.LEAD_MAX === 800) delete settings.LEAD_MAX;
 	// 25 % was the old density for full thickness; real decks rarely go over ~10 %.
@@ -205,6 +205,7 @@
 		SLIDERS.forEach(([key]) => setL(key, valueOf(key)));
 		TOGGLES.forEach(([key, id]) => setL(key, $(id) && $(id).checked ? 1 : 0));
 		HIDDEN.forEach(([key]) => setL(key, valueOf(key)));
+		sendCal();
 		setL("INIT", 1);
 	}
 
@@ -265,6 +266,184 @@
 		} catch (e) {
 			log("cloud layers not available");
 		}
+	}
+
+	// --- calibration ----------------------------------------------------------
+	// Points tuned by hand per sim cloud density (see Calibrate in
+	// CloudSurf.cpp), each { pct, DENS, SIZE, ... }, kept in the sim's storage
+	// and sent as L:CLOUDSURF_CAL_N, CAL<i>_PCT, CAL<i>_<key> and CAL_VER.
+	// While the Calibrate box is open L:CLOUDSURF_CAL_MODE is 1 and the
+	// sliders act live (LIVE_<key>).
+	const CAL_KEY = "CloudSurfCal1";
+	const CAL_KEYS = ["DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
+	                  "CLASSIC", "WISPS", "LATERAL", "VERTICAL"];
+	const CAL_SLIDERS = [
+		["DENS",     "Cloud density",           0,   2,    0.05, "x"],
+		["SIZE",     "Cloud size",              0.5, 2.5,  0.05, "x"],
+		["COUNT",    "Number of clouds",        10,  128,  1,    ""],
+		["WING",     "Wing fade",               0,   2,    0.05, "x"],
+		["BRIGHT",   "Brightness (light/dark)", 0.2, 3,    0.05, "x"],
+		["SPACING",  "New clouds every",        10,  400,  5,    "m"],
+		["LEAD",     "Spawn distance ahead",    200, 2500, 10,   "m"],
+		["WISPS",    "Wisps (atlas) share",     0,   1,    0.05, ""],
+		["LATERAL",  "Spread sideways",         20,  200,  1,    "m"],
+		["VERTICAL", "Spread up/down",          0,   150,  1,    "m"],
+	];
+	const CAL_TOLERANCE = 0.1;  // a new point within 10 % (at least 0.3 %) replaces the old one
+	let calPoints = loadStored(CAL_KEY) || [];
+	let calLive = {};
+	const pctSamples = [];  // the last 5 s of the module's density, for Confirm
+
+	function sendCal() {
+		calPoints.forEach((p, i) => {
+			setL(`CAL${i + 1}_PCT`, p.pct);
+			CAL_KEYS.forEach(k => setL(`CAL${i + 1}_${k}`, p[k]));
+		});
+		setL("CAL_N", calPoints.length);
+		setL("CAL_VER", Date.now() % 1000000000);
+	}
+
+	function saveCal() {
+		calPoints.sort((a, b) => a.pct - b.pct);
+		const raw = JSON.stringify(calPoints);
+		try { if (typeof SetStoredData === "function") SetStoredData(CAL_KEY, raw); } catch (e) {}
+		try { localStorage.setItem(CAL_KEY, raw); } catch (e) {}
+		sendCal();
+		renderCalList();
+	}
+
+	function setLive(key, v) {
+		calLive[key] = v;
+		setL("LIVE_" + key, v);
+		const s = CAL_SLIDERS.find(x => x[0] === key);
+		if (s) {
+			$("csCal_" + key).value = v;
+			$("csCalVal_" + key).textContent = fmt(v, s[4]) + s[5];
+		} else if (key === "CLASSIC") {
+			$("csCalClassic").checked = v >= 0.5;
+		}
+	}
+
+	function setLiveAll(values) {
+		CAL_KEYS.forEach(k => {
+			const s = CAL_SLIDERS.find(x => x[0] === k);
+			let v = Number(values[k]) || 0;
+			if (k === "CLASSIC") v = v >= 0.5 ? 1 : 0;
+			else if (s) v = Math.round(v / s[4]) * s[4];  // on the slider's steps
+			setLive(k, Number(v.toFixed(2)));
+		});
+	}
+
+	// What the stored points (or the normal settings) give at this density.
+	function loadHere() {
+		const values = {};
+		CAL_KEYS.forEach(k => { values[k] = getL("CAL_INT_" + k); });
+		setLiveAll(values);
+		log("calibrate: loaded the values for here");
+	}
+
+	const pctAvg = () => (pctSamples.length ? pctSamples.reduce((a, b) => a + b, 0) / pctSamples.length : NaN);
+
+	function confirmCal() {
+		const pct = pctAvg();
+		if (!(pct >= 0.3) || !(getL("PCT") >= 0.3)) {
+			log("calibrate: not in a cloud, nothing stored");
+			return;
+		}
+		const point = { pct: Math.round(pct * 100) / 100 };
+		CAL_KEYS.forEach(k => { point[k] = calLive[k]; });
+		const tol = Math.max(0.3, pct * CAL_TOLERANCE);
+		const old = calPoints.findIndex(p => Math.abs(p.pct - pct) <= tol);
+		if (old >= 0) calPoints.splice(old, 1);
+		calPoints.push(point);
+		saveCal();
+		log(`calibrate: ${old >= 0 ? "replaced" : "stored"} the point for ${point.pct.toFixed(1)} %`);
+	}
+
+	function renderCalList() {
+		const box = $("csCalList");
+		if (!box) return;
+		box.innerHTML = "";
+		if (!calPoints.length) {
+			box.innerHTML = '<div class="cs-cal-row"><span>None yet: the normal settings apply.</span></div>';
+			return;
+		}
+		calPoints.forEach((p, i) => {
+			const row = document.createElement("div");
+			row.className = "cs-cal-row";
+			row.innerHTML =
+				`<span>${p.pct.toFixed(1)} %: density ${fmt(p.DENS, 0.01)}, size ${fmt(p.SIZE, 0.01)}, ` +
+				`${p.COUNT} clouds, every ${p.SPACING} m, ${p.LEAD} m ahead</span>` +
+				`<button class="cs-btn" data-load="${i}">Load</button><button class="cs-btn" data-del="${i}">Delete</button>`;
+			box.appendChild(row);
+		});
+		box.querySelectorAll("[data-load]").forEach(b => b.addEventListener("click", () => {
+			setLiveAll(calPoints[+b.getAttribute("data-load")]);
+			log("calibrate: loaded a stored point");
+		}));
+		box.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+			const p = calPoints.splice(+b.getAttribute("data-del"), 1)[0];
+			saveCal();
+			log(`calibrate: deleted the point for ${p.pct.toFixed(1)} %`);
+		}));
+	}
+
+	function buildCal() {
+		CAL_SLIDERS.forEach(([key, label, min, max, step]) => {
+			const row = document.createElement("div");
+			row.className = "ctrl-master-intensity cs-row";
+			row.innerHTML =
+				`<p>${label} <span id="csCalVal_${key}" class="ctrl-intensity-value"></span></p>` +
+				`<span class="ctrl-slider-label">${min}</span>` +
+				`<div class="ctrl-slider-wrapper"><input type="range" id="csCal_${key}" min="${min}" max="${max}" step="${step}" /></div>` +
+				`<span class="ctrl-slider-label">${max}</span>`;
+			$("csCalSliders").appendChild(row);
+			row.querySelector("input").addEventListener("input", e => setLive(key, parseFloat(e.target.value)));
+		});
+		$("csCalClassic").addEventListener("change", () => setLive("CLASSIC", $("csCalClassic").checked ? 1 : 0));
+		$("csCalOpen").addEventListener("change", () => {
+			const on = $("csCalOpen").checked;
+			$("csCal").style.display = on ? "block" : "none";
+			if (on) loadHere();
+			setL("CAL_MODE", on ? 1 : 0);
+			log(on ? "calibrate: live tuning on" : "calibrate: off, stored points apply");
+		});
+		$("csCalConfirm").addEventListener("click", confirmCal);
+		$("csCalLoad").addEventListener("click", loadHere);
+		let armed = 0;
+		$("csCalClear").addEventListener("click", () => {
+			if (Date.now() - armed > 3000) {
+				armed = Date.now();
+				$("csCalClear").textContent = "Click again to delete all";
+				setTimeout(() => { $("csCalClear").textContent = "Delete all points"; }, 3000);
+				return;
+			}
+			calPoints = [];
+			saveCal();
+			$("csCalClear").textContent = "Delete all points";
+			log("calibrate: all points deleted");
+		});
+		setL("CAL_MODE", 0);
+		renderCalList();
+	}
+
+	function tickCal() {
+		const pct = getL("PCT");
+		pctSamples.push(pct >= 0.3 ? pct : NaN);
+		if (pctSamples.length > 20) pctSamples.shift();
+		if (pctSamples.some(isNaN)) pctSamples.length = 0;  // left the cloud: start over
+		if (!$("csCalOpen").checked) return;
+		const avg = pctAvg();
+		setText("csCalPct", pct >= 0.3 ? `${pct.toFixed(1)} %  (last 5 s ${isNaN(avg) ? "-" : avg.toFixed(1) + " %"})` : "not in a cloud",
+		        pct >= 0.3 ? "cs-ok" : "");
+		const fps = getL("FPS"), base = getL("FPS_BASE");
+		setText("csCalFps", fps > 0 ? `${fps.toFixed(0)} fps` + (base > 0 ? ` (${Math.round(100 * fps / base)} % of before the cloud)` : "") : "-");
+		const lead = calLive.LEAD || 0;
+		const reach = (calLive.COUNT || 0) / Math.max(1, valueOf("CLUSTER")) * (calLive.SPACING || 0) - 100;
+		setText("csCalReach", reach >= lead ? `all the way (${lead} m)` :
+		        `only ${Math.max(0, reach).toFixed(0)} of ${lead} m: more clouds or a larger spacing`, reach >= lead ? "cs-ok" : "cs-bad");
+		const btn = $("csCalConfirm");
+		if (btn) btn.textContent = isNaN(avg) ? "Confirm (fly in a cloud)" : `Confirm for ${avg.toFixed(1)} %`;
 	}
 
 	// --- status and debugger ------------------------------------------------
@@ -372,6 +551,7 @@
 	function init() {
 		if (!$("csSliders")) return;
 		buildSliders();
+		buildCal();
 		bindToggles();
 		showChoices();
 		applyAll();
@@ -390,6 +570,7 @@
 		let applied = false;
 		setInterval(() => {
 			tick();
+			tickCal();
 			if (!applied && last.beat > 0) { applyAll(); applied = true; log("module found, settings applied"); }
 		}, 250);
 		log("panel loaded");

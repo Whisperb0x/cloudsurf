@@ -62,6 +62,16 @@ the cloud layer (its real top and base are learned as you fly through them),
 which clouds stay or fade out when you leave a cloud, and the light from your
 aircraft.
 
+**Calibrate** tunes the look by hand per cloud density. While it is open its
+sliders act live (Auto FPS is off): cloud density, size, number of clouds,
+wing fade, brightness, how often new clouds come (every so many metres
+flown), how far ahead they appear, standard clouds on/off, the share of wisps,
+and the sideways and vertical spread. Fly in a cloud, tune, and press
+**Confirm**: the values are stored for the sim's cloud density there (its
+average over the last 5 s); a new point close to an old one (within 10 %)
+replaces it. Between the stored points CloudSurf blends the values by density,
+beyond them the nearest point holds. Without points the normal settings apply.
+
 **Advanced** shows what is automatic with live values, the few fixed
 settings (cloud style, including the experimental wisps made from cloud photo
 textures; distance ahead where new clouds appear, 1200 m and never closer than
