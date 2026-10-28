@@ -193,6 +193,10 @@ bool g_layers_real = false;
 double g_seen_top = 0.0, g_seen_bot = 0.0, g_seen_lat = 0.0, g_seen_lon = 0.0;
 const double kSeenRadius = 40000.0;  // m
 const double kLayerMargin = 30.0;  // m the flight path may be outside its layer and still get clouds
+// The sim's cloud reaches beyond the weather's band (seen: ~200 m below the
+// base): in cloud up to this far outside a layer still counts as that layer, so
+// no clouds are placed outside it.
+const double kNearLayer = 600.0;   // m
 // Clouds are placed with their centre from kDeckInBase above the base to
 // kDeckInTop below the top, so you fly right into them at the edge.
 const double kDeckInBase = 40.0, kDeckInTop = 50.0;
@@ -345,6 +349,16 @@ int LayerAt(double alt_m) {
 	for (int i = 0; i < g_layer_count; ++i)
 		if (alt_m >= g_layers[i].bot_m - kLayerMargin && alt_m <= g_layers[i].top_m + kLayerMargin) return i;
 	return -1;
+}
+
+// Layer whose top or base is nearest to alt_m within `reach` metres, or -1.
+int NearestLayer(double alt_m, double reach) {
+	int best = -1;
+	for (int i = 0; i < g_layer_count; ++i) {
+		double d = fmax(LayerBot(i) - alt_m, alt_m - LayerTop(i));
+		if (d <= reach) { reach = d; best = i; }
+	}
+	return best;
 }
 
 // Climbing or descending towards a well covered layer that the flight path
@@ -839,6 +853,9 @@ void Update() {
 	ReadLayers(a);
 	CheckLayersChanged();
 	g_layer_now = test ? -1 : LayerAt(a.alt_m);
+	// In the sim's cloud just outside the band: still that deck, so clouds
+	// stay inside it instead of appearing below or above us.
+	if (!test && in_cloud && g_layer_now < 0) g_layer_now = NearestLayer(a.alt_m, kNearLayer);
 	int ahead = -1;
 	if (!test && !in_cloud && g_layer_now < 0) ahead = LayerAhead(a, g_cfg.lead_max);
 	if (ahead >= 0) {
