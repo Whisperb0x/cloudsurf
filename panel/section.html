@@ -22,6 +22,13 @@
                                     </div>
 
                                     <div id="csMain"></div>
+                                    <div class="cs-effect">
+                                        <p>Cloud style</p>
+                                        <button class="cs-btn" id="csEffectPrev">&lt;</button>
+                                        <span class="cs-val" id="csEffectName">-</span>
+                                        <button class="cs-btn" id="csEffectNext">&gt;</button>
+                                    </div>
+                                    <p class="cs-hint">Hotkey: Ctrl+Shift+C switches CloudSurf on and off.</p>
 
                                     <div class="ctrl-master-toggle">
                                         <p>Advanced: what is automatic, all settings, calibrate, debug</p>
@@ -33,7 +40,8 @@
                                 <p class="ctrl-section-label">Automatic (follows the sim)</p>
                                 <div class="ctrl-master-big cs-box">
                                     <ul class="cs-auto">
-                                        <li>Starts as soon as you are in a cloud: first a wide, thin wall of small clouds about 600 m ahead, then the normal clouds beyond it; the first clouds fade in slower</li>
+                                        <li>Starts as soon as you are in a cloud: first a wide, thin wall of small clouds about 600 m ahead, then the normal clouds beyond it; the cloud builds up over the first 400 m flown in it</li>
+                                        <li>Thin cloud: mostly large, very light wisps that appear far ahead (spawn distance) and come out of the haze slowly; thick cloud: denser round clouds that appear closer (half the spawn distance) and come out of the murk near you, as in real cloud where you see little</li>
                                         <li>Thickness and darkness of every cloud follow the sim's cloud density around you, live, all the time; the number of clouds follows it too</li>
                                         <li>Near edges (density changing fast) and in steep climbs or descents, new clouds come closer</li>
                                         <li>Clouds stay inside the cloud layer of the current weather, from 150 m above its base to 150 m below its top; nothing is remembered from earlier decks</li>
@@ -57,11 +65,9 @@
 
                                 <p class="ctrl-section-label">Settings</p>
                                 <div class="ctrl-master-big cs-box">
-                                    <div class="cs-effect">
-                                        <p>Cloud style</p>
-                                        <button class="cs-btn" id="csEffectPrev">&lt;</button>
-                                        <span class="cs-val" id="csEffectName">-</span>
-                                        <button class="cs-btn" id="csEffectNext">&gt;</button>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Fade clouds by distance from the camera (off = from the aircraft)</p>
+                                        <input type="checkbox" id="csCamFade" checked />
                                     </div>
                                     <div class="ctrl-master-toggle">
                                         <p>Lit by the sim's light (off = unlit, experimental)</p>

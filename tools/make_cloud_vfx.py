@@ -57,6 +57,8 @@ FADE_OUT = 0.4                         # share of the lifetime used to fade out
 GLOW_GAIN = 6.0                        # emissive per unit of light strength
 UNLIT_GAIN = 2.0                       # emissive per unit of CloudTone when unlit
 NEAR_FADE = (6.0, 20.0)                # m: particles closer than 6 m are gone, full from 26 m
+SPIN = 2.0                             # deg/s, random spin either way, so the clouds never look frozen
+EDGE_THIN = 0.6                        # particles at the edge of a cloud have (1 - EDGE_THIN) of the opacity
 # Light falloff 1 / (1 + (d/near)^2), reaching zero at `reach` (metres).
 LANDING_NEAR, LANDING_REACH = 250.0, 600.0
 LANDING_CONE = 12.0                    # degrees, half angle where the landing light ends
@@ -212,6 +214,8 @@ def build(name, atlas):
     tone = param("CloudTone", 1.0, (-700, 400))
     lit = param("CloudLit", 1.0, (-700, 470))
     vis = param("CloudVis", 3000.0, (-1100, 1300))
+    vis_near = param("CloudVisNear", 1500.0, (-1100, 1380))
+    cam_fade = param("CloudCamFade", 1.0, (-1100, 1460))  # 1 = fade by camera distance, 0 = by aircraft distance
     calpha = param("CloudAlpha", 1.0, (-700, 550))
     cfade = param("CloudFade", 1.0, (-700, 625))
     light = vector3("light", [(param(n, 0.0, (-1100, 700 + 80 * i)), 0)
@@ -230,15 +234,33 @@ def build(name, atlas):
 
     # random start position (flat), rotation and size per particle
     spread_h, spread_v = (ATLAS_SPREAD_H, ATLAS_SPREAD_V) if atlas else (SPREAD_H, SPREAD_V)
-    rx = random("rx", -spread_h, spread_h, pid, 1, (-800, -300))
-    ry = random("ry", -spread_v, spread_v, pid, 2, (-800, -220))
-    rz = random("rz", -spread_h, spread_h, pid, 3, (-800, -140))
+    def centred(tag, s, i, y):
+        a = random(tag + "a", -s, s, pid, i, (-900, y))
+        b = random(tag + "b", -s, s, pid, i + 20, (-900, y + 40))
+        return math_node("MultiplyOperation", tag, math_node("AddOperation", tag + "s", a, b, (-850, y)),
+                         None, (-800, y), yv=0.5)
+    rx = centred("rx", spread_h, 1, -300)
+    ry = centred("ry", spread_v, 2, -220)
+    rz = centred("rz", spread_h, 3, -140)
+    # 0 at the centre .. 1 at the edge of the spread (ellipsoid)
+    nx = math_node("MultiplyOperation", "nx", rx, None, (-700, -320), yv=1.0 / spread_h)
+    ny = math_node("MultiplyOperation", "ny", ry, None, (-700, -240), yv=1.0 / spread_v)
+    nz = math_node("MultiplyOperation", "nz", rz, None, (-700, -160), yv=1.0 / spread_h)
+    nvec = vector3("nvec", [(nx, 0), (ny, 0), (nz, 0)], (-650, -240))
+    edge = clamp("edge", math_node("PowOperation", "edger", math_node("Dot", "edge2", nvec, nvec, (-600, -240)),
+                                   None, (-550, -240), yv=0.5), 0.0, 1.0, (-500, -240))
+    edge_k = math_node("SubtractOperation", "edgek", None,
+                       math_node("MultiplyOperation", "edgek0", lerp("edges", None, None, edge, (-450, -260),
+                                                                   xv=0.0, yv=1.0, smooth=True),
+                                 None, (-400, -260), yv=EDGE_THIN), (-350, -260), xv=1.0)
     # the spread grows with CloudSize too, so big clouds are big all over
     start_1 = vector3("startpos", [(rx, 0), (ry, 0), (rz, 0)], (-600, -220))
     start = math_node("MultiplyOperation", "startscaled", start_1, csize, (-500, -220))
     rrot = random("rrot", -ATLAS_TILT if atlas else 0.0, ATLAS_TILT if atlas else 6.283, pid, 4, (-800, -60))
     rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
     rsize = random("rsize", SIZE_VAR[0], SIZE_VAR[1], pid, 5, (-800, 20))
+    spin = random("rspin", -SPIN, SPIN, pid, 7, (-800, 60))
+    spin_axis = vector3("spinaxis", [(None, 0), (None, 0), (None, 1.0)], (-600, 60))
 
     base_size = math_node("MultiplyOperation", "initsize", csize, None, (-450, 250),
                           yv=ATLAS_SIZE if atlas else SIZE)
@@ -261,12 +283,15 @@ def build(name, atlas):
         alpha_n = math_node("MultiplyOperation", "alphawisp", alpha_n, None, (-330, 160), yv=ATLAS_ALPHA)
     alpha0 = clamp("alphamax", alpha_n, 0.0, 1.0, (-300, 100))
     fout_t = lerp("fadeoutt", None, None, age, (-450, 220), xv=1.0 / FADE_OUT, yv=0.0)
-    fout = clamp("fadeout", fout_t, 0.0, 1.0, (-350, 240))
+    fout = lerp("fadeouts", None, None, clamp("fadeout", fout_t, 0.0, 1.0, (-350, 240)), (-300, 240),
+                xv=0.0, yv=1.0, smooth=True)
     fin_t = math_node("MultiplyOperation", "fadeint", age, None, (-450, 180), yv=1.0 / FADE_IN)
-    fin = clamp("fadein", fin_t, 0.0, 1.0, (-350, 200))
+    fin = lerp("fadeins", None, None, clamp("fadein", fin_t, 0.0, 1.0, (-350, 200)), (-300, 200),
+               xv=0.0, yv=1.0, smooth=True)
     fade_p = math_node("MultiplyOperation", "fadep", fin, fout, (-250, 220))
     fade = math_node("MultiplyOperation", "fade", fade_p, cfade, (-200, 240))
-    alpha = math_node("MultiplyOperation", "alphafade", alpha0, fade, (-150, 180))
+    alpha = math_node("MultiplyOperation", "alphafade",
+                      math_node("MultiplyOperation", "alphaedge", alpha0, edge_k, (-200, 160)), fade, (-150, 180))
     grey_d = lerp("grey", None, None, dens1, (-450, -20), xv=GREY_THIN, yv=GREY_DENSE)
     grey = math_node("MultiplyOperation", "greyshade", grey_d, tone, (-350, -20))
     diffuse = math_node("MultiplyOperation", "diffuse", grey, lit, (-250, -20))
@@ -285,16 +310,29 @@ def build(name, atlas):
     rel = math_node("SubtractOperation", "rel", ppos, light, (-150, 1100))
     dd = math_node("Dot", "dd", rel, rel, (-50, 1100))
     dist = math_node("PowOperation", "dist", dd, None, (50, 1100), yv=0.5)
-    # out of the fog: full from CloudVis/2, gone beyond CloudVis; and gone very
-    # close to the aircraft (no hard edges on the windscreen)
+    # distance from the camera, as Asobo's own effects do it (camera minus the
+    # particle's position); blended with the aircraft distance by CloudCamFade
+    cam = out("campos")
+    node("GetCameraPosition", "campos", f"            <OutputValue>{cam}</OutputValue>\n", (-350, 850))
+    ppos_now = attribute("pposnow", "Position", False, (-350, 800))
+    crel = math_node("SubtractOperation", "crel", cam, ppos_now, (-250, 830))
+    cdist = math_node("PowOperation", "cdist", math_node("Dot", "cdd", crel, crel, (-150, 830)), None, (-50, 830), yv=0.5)
+    fdist = lerp("fdist", dist, cdist, cam_fade, (50, 900))
+    # out of the fog: gone beyond CloudVis, full from CloudVisNear (smoothly);
+    # and gone very close to the camera (no hard edges on the windscreen)
     vis_t = math_node("DivideOperation", "vist",
-                      math_node("SubtractOperation", "visleft", vis, dist, (150, 1000)),
-                      math_node("MultiplyOperation", "vishalf", vis, None, (150, 960), yv=0.5), (250, 1000))
-    vis_k = clamp("visk", vis_t, 0.0, 1.0, (350, 1000))
-    near_k = clamp("camk", math_node("MultiplyOperation", "camt",
-                                       math_node("SubtractOperation", "camleft", dist, None, (150, 900),
-                                                 yv=NEAR_FADE[0]),
-                                       None, (250, 900), yv=1.0 / NEAR_FADE[1]), 0.0, 1.0, (350, 900))
+                      math_node("SubtractOperation", "visleft", vis, fdist, (150, 1000)),
+                      math_node("AddOperation", "visspan",
+                                math_node("SubtractOperation", "visspan0", vis, vis_near, (150, 960)),
+                                None, (200, 960), yv=1.0), (250, 1000))
+    vis_k = lerp("visk", None, None, clamp("visk0", vis_t, 0.0, 1.0, (300, 1000)), (350, 1000),
+                 xv=0.0, yv=1.0, smooth=True)
+    near_k = lerp("camk", None, None,
+                  clamp("camk0", math_node("MultiplyOperation", "camt",
+                                           math_node("SubtractOperation", "camleft", fdist, None, (150, 900),
+                                                     yv=NEAR_FADE[0]),
+                                           None, (250, 900), yv=1.0 / NEAR_FADE[1]), 0.0, 1.0, (300, 900)),
+                  (350, 900), xv=0.0, yv=1.0, smooth=True)
     alpha_v = math_node("MultiplyOperation", "alphavis",
                         math_node("MultiplyOperation", "alphavis0", alpha, vis_k, (450, 1000)), near_k, (550, 950))
     colour = vector4("colour", [(diffuse, 0), (diffuse, 0), (diffuse, 0), (alpha_v, 0)], (650, 950))
@@ -381,6 +419,8 @@ def build(name, atlas):
          f"            <ParticlePosition>\n                {float3(start)}\n            </ParticlePosition>\n"
          f"            <ParticleRotation>\n                {float3(rot)}\n            </ParticleRotation>\n"
          f"            <ParticleVelocity>\n                {float3(None)}\n            </ParticleVelocity>\n"
+         f"            <ParticleVelocityRotationAxis>\n                {float3(spin_axis)}\n            </ParticleVelocityRotationAxis>\n"
+         f"            <ParticleVelocityRotationRate>\n    {pin('FloatIn', spin, 0)}            </ParticleVelocityRotationRate>\n"
          + tex, (300, 200))
     node("BlockParticleUpdate", "update",
          "            <ParticleOutput>\n"

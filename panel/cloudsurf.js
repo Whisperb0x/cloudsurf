@@ -4,16 +4,16 @@
 	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
 	// show on the main page (kept simple); the rest are under "Advanced".
 	// Everything else follows the sim on its own (see the Automatic box).
-	const MAIN = ["INTENSITY", "GLOW", "WING"];
+	const MAIN = ["INTENSITY", "LEAD_MAX", "GLOW", "WING"];
 	const SLIDERS = [
 		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
 		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (times the automatic one)", 0.2, 3, 0.05, 1.0, "x"],
 		["INTENSITY",    "Intensity (0 = practically off)", 0, 100, 1, 100, "%"],
-		["GLOW",         "Aircraft lights (glow in cloud)", 0, 30, 0.05, 0.85, "x"],
+		["GLOW",         "Aircraft lights (beta: glow in cloud)", 0, 30, 0.05, 0.85, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
-		["LEAD_MAX",     "New clouds appear ahead at (closer near edges, at least 500 m)", 500, 2500, 10, 800, "m"],
+		["LEAD_MAX",     "Spawn distance (thin cloud; thick cloud half of it)", 300, 2500, 10, 1000, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
@@ -40,12 +40,13 @@
 	// Effect labels, filled in by build.py in the same order as kEffects.
 	// L:CLOUDSURF_EFFECT is an index into it, or -1 for the mix (style Full).
 	const EFFECTS = /*@EFFECTS@*/[];
-	const DEFAULT_EFFECT = 0;
+	const DEFAULT_EFFECT = -1;
 	// The custom-texture wisps are experimental: only here, not on the main page.
-	const EFFECT_LABELS = { CloudSurf: "Classic", CloudSurfWisps: "Wisps only (experimental)" };
-	const effectLabel = i => (i < 0 ? "Classic + wisps (experimental)" : EFFECT_LABELS[EFFECTS[i]] || EFFECTS[i] || "?");
+	const EFFECT_LABELS = { CloudSurf: "Classic", CloudSurfWisps: "Wisps only" };
+	const effectLabel = i => (i < 0 ? "Classic + wisps (thin cloud: wisps)" : EFFECT_LABELS[EFFECTS[i]] || EFFECTS[i] || "?");
 	const TOGGLES = [
 		["ENABLE",   "csEnable",  1],
+		["CAM_FADE", "csCamFade", 1],
 		["TEST",     "csTest",    0],
 		["LIT",      "csLit",     1],
 	];
@@ -88,6 +89,12 @@
 		settings.__v4 = true;
 	}
 	// v7: a box 100 m either side and 100 m up and down.
+	// v8 (1.1): spawn distance now per cloud thickness (default 1000 m) and
+	// Classic + wisps the default style
+	if (!settings.__v8) {
+		["LEAD_MAX", "EFFECT"].forEach(k => delete settings[k]);
+		settings.__v8 = true;
+	}
 	if (!settings.__v7) {
 		["LATERAL", "VERTICAL"].forEach(k => delete settings[k]);
 		settings.__v7 = true;
@@ -588,10 +595,21 @@
 		$("csClear").addEventListener("click", () => { setL("CLEAR", 1); log("all clouds cleared"); });
 		$("csReset").addEventListener("click", resetAll);
 		// The module may load after the panel; re-apply once it is alive.
-		let applied = false;
+		let applied = false, toggles = -1;
 		setInterval(() => {
 			tick();
 			tickCal();
+			// the hotkey (Ctrl+Shift+C) switched CloudSurf on or off: take that over
+			const t = getL("TOGGLES");
+			if (last.beat > 0 && t !== toggles) {
+				if (t > 0 && (toggles >= 0 || !applied)) {
+					settings.ENABLE = getL("ENABLE") > 0.5 ? 1 : 0;
+					$("csEnable").checked = settings.ENABLE > 0.5;
+					save();
+					log(`hotkey: CloudSurf ${settings.ENABLE ? "on" : "off"}`);
+				}
+				toggles = t;
+			}
 			if (!applied && last.beat > 0) { applyAll(); applied = true; log("module found, settings applied"); }
 		}, 250);
 		log("panel loaded");

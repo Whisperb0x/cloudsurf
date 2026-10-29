@@ -94,7 +94,11 @@ const double kFtToM = 0.3048;
 const int kMaxPuffs = 128;
 
 HANDLE g_sim = 0;
-enum { EVT_FRAME = 1, EVT_SIMSTOP = 2 };
+enum { EVT_FRAME = 1, EVT_SIMSTOP = 2, EVT_TOGGLE = 3 };
+enum { GROUP_KEYS = 1, INPUT_KEYS = 1 };
+// Hotkey: CloudSurf on/off (L:CLOUDSURF_ENABLE). L:CLOUDSURF_TOGGLES counts the
+// presses, so the panel can take the new state over.
+const char* const kToggleKey = "VK_LCONTROL+VK_LSHIFT+C";
 
 // Settings, L:CLOUDSURF_<name>, set from the panel. Everything else follows
 // the sim on its own; the fixed values for that are the constants below.
@@ -111,7 +115,7 @@ const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
 	{ "INTENSITY",  100.0, &Config::intensity },  // % of the full effect: density (so also wing fade) and, through it, the number of clouds; 0 = off
 	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
-	{ "LEAD_MAX",   800.0, &Config::lead_max },   // m ahead where new clouds appear (closer near edges)
+	{ "LEAD_MAX",   1000.0, &Config::lead_max },  // m ahead where new clouds appear in thin cloud; thick cloud down to kLeadThick of it (closer near edges too)
 	{ "LATERAL",    100.0, &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   100.0, &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
@@ -121,10 +125,11 @@ const ConfigVar kConfigVars[] = {
 	{ "SIZE",       1.65,  &Config::size },       // cloud size
 	{ "GLOW",       0.85,  &Config::glow },       // glow from aircraft lights (the effect reads it as GLOW_NOW)
 	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, times the automatic one (see UpdateTone)
+	{ "CAM_FADE",   1.0,   nullptr },             // 1 = clouds fade by distance from the camera, 0 = from the aircraft (read by the effect)
 	{ "LIT",        1.0,   &Config::lit },        // 1 = lit by the sim's light (it decides how dark), 0 = unlit (experimental)
 	{ "TEST",       0.0,   &Config::test },       // 1 = test clouds in clear sky
 	{ "TEST_DENS",  1.0,   &Config::test_dens },  // their density 0..1
-	{ "EFFECT",     0.0,   &Config::effect },     // index into kEffects, -1 = Classic + wisps
+	{ "EFFECT",     -1.0,  &Config::effect },     // index into kEffects, -1 = Classic + wisps (mostly wisps in thin cloud)
 	{ "WING",       1.0,   &Config::wing },       // wing fade: cloud flakes streaming over the wings, 0 = off
 	{ "BEAM",       0.0,   &Config::beam },       // visible beam of mist (CloudSurfBeam) on/off; off: it pointed backwards, the landing lights light up the clouds themselves
 	{ "BEAM_FWD",   10.0,  &Config::beam_fwd },   // m ahead of the aircraft origin
@@ -142,7 +147,7 @@ const double kEntryWaveWide = 3.0;   // times the box width (LATERAL)
 const double kEntryWaveDens = 0.35;  // density, times the normal one
 const double kEntrySmallSize = 0.25; // size, times the normal one
 const int kEntryWaveRows = 2, kEntryWaveCount = 10;
-const double kLeadMin = 500.0;       // m ahead new clouds appear at least, however the density changes
+const double kLeadMin = 300.0;       // m ahead new clouds appear at least, however the density changes
 const double kMinSpacing = 15.0;     // m flown per spawn step, at least
 const double kBehind = 100.0;        // m behind us a cloud is removed
 const double kDensVar = 0.25;        // random thinning per cloud
@@ -213,7 +218,13 @@ const double kPreCoverage = 0.6;   // start early only into layers at least this
 double g_last_mix = 0.6;           // density curve value of the last cloud, for early starts
 // Density all clouds follow (L:CLOUDSURF_DENS_LIVE): the current one in cloud;
 // after leaving, the last one is held for the clouds that stay, then let go.
+// Entering a cloud it builds up: from kEntryStart of it over the first
+// kEntryRamp metres flown in cloud (smoothly), as the cloud closes in around
+// you (the sim's own density is there in half a second, see the logs of
+// 27-28 Oct 2026: 80 % of its level within 0.5 s / ~90 m, flat after that).
 double g_dens_live = 0.0;
+const double kEntryStart = 0.3, kEntryRamp = 400.0;  // -, m
+double g_in_dist = 0.0;  // m flown in this cloud
 const double kDensHold = 0.5, kDensRelease = 1.5;  // s
 
 Config g_cfg;
@@ -512,11 +523,24 @@ double g_cal_ver = -1.0;
 bool g_cal_on = false;              // calibrated values in use this frame
 double g_calv[CK_N];                // the values in use
 
-// Style Classic + wisps (experimental): the big clouds (CloudSurf, kEffects[0]) lead; light wisps
-// (CloudSurfWisps, kEffects[1]) are mixed in as an accent, at most kWispShare
-// of the clouds below kMixLo and none above kMixHi. mix is the sim's cloud
-// density on the 0..1 curve, before MULT.
-const double kWispShare = 0.35;
+// Style Classic + wisps (the default): thin cloud is mostly light, large wisps
+// (CloudSurfWisps, kEffects[1], made from cloud photos), thick cloud mostly
+// the round clouds (CloudSurf, kEffects[0]). The share of wisps goes from
+// kWispThin at kWispThinPct sim density and below to kWispThick at
+// kWispThickPct and none from kWispNonePct. In thin cloud the wisps are also
+// kWispThinSize times larger (down to 1x in thick cloud).
+const double kWispThin = 0.85, kWispThick = 0.15;
+const double kWispThinPct = 1.5, kWispThickPct = 6.0, kWispNonePct = 9.0;
+const double kWispThinSize = 1.8;
+const double kWispShare = kWispThin;  // for the calibration's normal value
+
+double WispShare() {
+	double pct = g_smooth;
+	if (pct <= kWispThinPct) return kWispThin;
+	if (pct <= kWispThickPct) return kWispThin + (kWispThick - kWispThin) * (pct - kWispThinPct) / (kWispThickPct - kWispThinPct);
+	if (pct <= kWispNonePct) return kWispThick * (kWispNonePct - pct) / (kWispNonePct - kWispThickPct);
+	return 0.0;
+}
 
 // The effect for a new cloud, or -1 for none.
 int PickEffect(double mix) {
@@ -532,9 +556,24 @@ int PickEffect(double mix) {
 	int fx = CurrentEffect();
 	if (fx >= 0) return fx;
 	if (kSelectableEffects < 2) return 0;
-	double span = fmax(0.05, kMixHi - kMixLo);
-	double thick = fmin(1.0, fmax(0.0, (mix - kMixLo) / span));
-	return Rand01() < kWispShare * (1.0 - thick) ? 1 : 0;
+	(void)mix;
+	return Rand01() < WispShare() ? 1 : 0;
+}
+
+// How thick the cloud is, 0 (thin, at kMinPct) .. 1 (FULL_PCT), linear in the
+// sim's density.
+double DensLevel() {
+	double span = fmax(1.0, g_cfg.full_pct - kMinPct);
+	return fmin(1.0, fmax(0.0, (g_smooth - kMinPct) / span));
+}
+
+// Spawn distance before edges and climbs: LEAD_MAX in thin cloud, where you
+// see far (~400 m in real thin cloud), down to kLeadThick of it in thick
+// cloud, where you see little (50-90 m), so the clouds come out of the murk
+// close by instead of being seen far through it.
+const double kLeadThick = 0.5;
+double LeadBase() {
+	return g_cfg.lead_max * (1.0 - (1.0 - kLeadThick) * DensLevel());
 }
 
 int CloudCap();
@@ -574,9 +613,12 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	double side = (cx * 2.0 - 1.0) * lateral;
 	double up = (cy * 2.0 - 1.0) * g_cfg.vertical * (1.0 - steep);
 
-	// Small to big, mostly medium: 0.5..2.4 times SIZE.
+	int fx_index = PickEffect(g_mix);
+	if (fx_index < 0) return false;
+	// Small to big, mostly medium: 0.5..2.4 times SIZE; thin-cloud wisps larger.
 	double r = Rand01();
 	double size = (0.5 + 1.9 * pow(r, 1.4)) * g_cfg.size * size_k;
+	if (fx_index == 1) size *= 1.0 + (kWispThinSize - 1.0) * (1.0 - DensLevel());
 	slot->half = kCloudHalfHeight * size;
 
 	double e = fe * lead + re * side;
@@ -602,8 +644,6 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 	// Each cloud follows the density around us all its life (L:CLOUDSURF_DENS_LIVE,
 	// see Update), times its own factor: thin ones mixed with thicker ones.
 	double factor = (1.0 - kDensVar * Rand01()) * dens_k;
-	int fx_index = PickEffect(g_mix);
-	if (fx_index < 0) return false;
 	const Effect& fx = kEffects[fx_index];
 	FsVfxGraphParam params[20];
 	int nparams = 0;
@@ -639,6 +679,8 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 		params[nparams++] = { "CloudTone", "(L:CLOUDSURF_TONE, number)" };
 		params[nparams++] = { "CloudLit", "(L:CLOUDSURF_LIT, number)" };
 		params[nparams++] = { "CloudVis", "(L:CLOUDSURF_VIS, number)" };
+		params[nparams++] = { "CloudVisNear", "(L:CLOUDSURF_VIS_NEAR, number)" };
+		params[nparams++] = { "CloudCamFade", "(L:CLOUDSURF_CAM_FADE, number)" };
 		params[nparams++] = { "CloudAlpha", kNightAlphaRpn };
 		params[nparams++] = { "CloudFade", slot->fade };
 		params[nparams++] = { "LandingGlow", kLandingRpn };
@@ -907,7 +949,7 @@ void UpdateTone(const Aircraft& a, double dt, bool in_cloud) {
 double DensitySpacing(double dens) {
 	if (g_cal_on) return fmax(kMinSpacing, g_calv[CK_SPACING]);
 	double cluster = fmin(16.0, fmax(1.0, g_cfg.cluster));
-	double stretch = fmax(50.0, g_cfg.lead_max + kBehind);
+	double stretch = fmax(50.0, LeadBase() + kBehind);
 	double even = stretch * cluster / fmax(1.0, (double)CloudCap());
 	double spacing = fmax(kMinSpacing, even);
 	return spacing / (0.4 + 0.6 * fmin(1.0, dens)) / (0.4 + 0.6 * g_thin);
@@ -957,7 +999,7 @@ double Calibrate(double dens, double now) {
 	normal[CK_SPACING] = DensitySpacing(dens);
 	normal[CK_LEAD] = g_cfg.lead_max;
 	normal[CK_CLASSIC] = fx == 1 ? 0.0 : 1.0;
-	normal[CK_WISPS] = fx == 1 ? 1.0 : fx < 0 ? kWispShare * (1.0 - thick) : 0.0;
+	normal[CK_WISPS] = fx == 1 ? 1.0 : fx < 0 ? WispShare() : 0.0;
 	normal[CK_LATERAL] = g_cfg.lateral;
 	normal[CK_VERTICAL] = g_cfg.vertical;
 	normal[CK_GLOW] = g_cfg.glow;
@@ -1025,24 +1067,31 @@ void HandleExit(const Aircraft& a) {
 	}
 }
 
-// L:CLOUDSURF_VIS: the clouds fade in by distance, from nothing at VIS to
-// full at VIS / 2 (the effect, CloudVis), so a new cloud comes out of the fog
-// instead of popping up where it appears. VIS follows the spawn distance
-// (kVisLead times it, smoothly over kVisSmooth); entering a cloud it starts
-// there at once. Test mode: kVisFar, as good as no fade.
+// L:CLOUDSURF_VIS and VIS_NEAR: the clouds fade in by distance, from nothing
+// at VIS to full at VIS_NEAR (the effect, CloudVis / CloudVisNear, smoothly),
+// so a new cloud comes out of the fog instead of popping up where it appears.
+// VIS follows the spawn distance (kVisLead times it); VIS_NEAR is a share of
+// it, kVisNearThin in thin cloud (see far) down to kVisNearThick in thick
+// cloud (see little). Both follow smoothly over kVisSmooth; entering a cloud
+// they start there at once. Test mode: kVisFar, as good as no fade.
 const double kVisFar = 5000.0, kVisLead = 1.0;  // m, -
+const double kVisNearThin = 0.45, kVisNearThick = 0.25;
 const double kVisSmooth = 1.0;                  // s
-double g_vis = kVisFar;
+double g_vis = kVisFar, g_vis_near = kVisFar * 0.5;
 bool g_vis_active = false;
 
 void UpdateVis(double dt, bool active, bool test, double lead_now) {
-	if (test) g_vis = kVisFar;
+	if (test) { g_vis = kVisFar; g_vis_near = kVisFar * 0.5; }
 	else if (active && lead_now > 0.0) {
 		double want = lead_now * kVisLead;
-		g_vis = g_vis_active ? g_vis + (want - g_vis) * fmin(1.0, dt / kVisSmooth) : want;
+		double want_near = want * (kVisNearThin + (kVisNearThick - kVisNearThin) * DensLevel());
+		double k = g_vis_active ? fmin(1.0, dt / kVisSmooth) : 1.0;
+		g_vis += (want - g_vis) * k;
+		g_vis_near += (want_near - g_vis_near) * k;
 	}
 	g_vis_active = active && !test;
 	SetL("VIS", g_vis);
+	SetL("VIS_NEAR", fmin(g_vis_near, 0.95 * g_vis));
 }
 
 // L:CLOUDSURF_WING_K, 0..1 on the wing fade: how much of the space close
@@ -1053,7 +1102,7 @@ void UpdateVis(double dt, bool active, bool test, double lead_now) {
 // kWingDrop, at once (without waiting out a short gap).
 const double kWingNear = 400.0, kWingBehind = 100.0;  // m
 const double kWingFill = 0.5;
-const double kWingRise = 2.0, kWingFall = 1.0, kWingDrop = 0.35;  // s
+const double kWingRise = 2.0, kWingFall = 1.0, kWingDrop = 0.8;  // s
 double g_wing_k = 0.0;
 double g_spacing_now = 100.0;
 
@@ -1171,8 +1220,13 @@ void Update() {
 	bool active = g_cfg.enable > 0.5 && a.speed >= kMinSpeed && (test || in_cloud || ahead >= 0);
 	if (active) g_last_active = a.time;
 
+	if (in_cloud) g_in_dist += a.speed * dt;
+	else if (a.time - g_last_cloudy >= kExitHold) g_in_dist = 0.0;  // a real exit, not a short gap
+	double ramp = fmin(1.0, g_in_dist / kEntryRamp);
+	double entry_k = kEntryStart + (1.0 - kEntryStart) * ramp * ramp * (3.0 - 2.0 * ramp);
+	SetL("ENTRY", entry_k);
 	if (test) g_dens_live = test_dens;
-	else if (active) g_dens_live = dens;
+	else if (active) g_dens_live = dens * (in_cloud ? entry_k : 1.0);
 	else if (a.time - g_last_active > kDensHold) g_dens_live = fmax(0.0, g_dens_live - dt * g_dens_live / kDensRelease - dt * 0.05);
 	SetL("DENS_LIVE", g_dens_live);
 	UpdateTone(a, dt, in_cloud || test);
@@ -1230,7 +1284,7 @@ void Update() {
 			spacing *= rising ? 1.0 - 0.4 * change : 1.0 + 0.5 * change;
 			double shrink = (rising ? kLeadShrink : kLeadShrinkThin) * change;
 			double steep = fmin(0.35, 2.0 * fabs(a.vu) / fmax(1.0, a.speed));
-			double lead_far = fmax(g_cfg.lead_max * (1.0 - shrink) * (1.0 - steep), fmin(kLeadMin, g_cfg.lead_max));
+			double lead_far = fmax(LeadBase() * (1.0 - shrink) * (1.0 - steep), fmin(kLeadMin, g_cfg.lead_max));
 			double lead_wave = fmin(kEntryWave, lead_far);
 			lead_now = lead_far;
 			// First entry. The sim only reports the cloud we are in, not one
@@ -1289,6 +1343,10 @@ void CALLBACK Dispatch(SIMCONNECT_RECV* data, DWORD, void*) {
 		g_fps_frame = static_cast<SIMCONNECT_RECV_EVENT_FRAME*>(data)->fFrameRate;
 	if (evt->uEventID == EVT_FRAME) Update();
 	else if (evt->uEventID == EVT_SIMSTOP) { DestroyAll(); DestroyBeam(); DestroyWing(); g_last_time = -1.0; }
+	else if (evt->uEventID == EVT_TOGGLE) {
+		SetL("ENABLE", GetL("ENABLE") > 0.5 ? 0.0 : 1.0);
+		SetL("TOGGLES", GetL("TOGGLES") + 1.0);
+	}
 }
 
 }  // namespace
@@ -1300,6 +1358,11 @@ extern "C" MSFS_CALLBACK void module_init(void) {
 	}
 	SimConnect_SubscribeToSystemEvent(g_sim, EVT_FRAME, "Frame");
 	SimConnect_SubscribeToSystemEvent(g_sim, EVT_SIMSTOP, "SimStop");
+	SimConnect_MapClientEventToSimEvent(g_sim, EVT_TOGGLE, "CloudSurf.Toggle");
+	SimConnect_AddClientEventToNotificationGroup(g_sim, GROUP_KEYS, EVT_TOGGLE, FALSE);
+	SimConnect_SetNotificationGroupPriority(g_sim, GROUP_KEYS, SIMCONNECT_GROUP_PRIORITY_HIGHEST);
+	SimConnect_MapInputEventToClientEvent_EX1(g_sim, INPUT_KEYS, kToggleKey, EVT_TOGGLE);
+	SimConnect_SetInputGroupState(g_sim, INPUT_KEYS, SIMCONNECT_STATE_ON);
 	SimConnect_CallDispatch(g_sim, Dispatch, nullptr);
 	fprintf(stdout, "CloudSurf: loaded\n");
 }

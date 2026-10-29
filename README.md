@@ -21,11 +21,12 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
    Community folder.
 2. Start the sim and open **CloudSurf** from the toolbar. If the button does not
    show, enable it in the toolbar settings.
-   **Open the panel once after loading a flight**: it reads the cloud layers of
-   the active weather, so CloudSurf knows where decks start and end even the
-   first time you climb or descend through one. They stay known after you close
-   the panel. Without that, CloudSurf only goes by being in cloud: clouds are
-   not kept inside a deck, and the colour is not lighter near its top.
+   **Open the panel once after loading a flight**, and again after the weather
+   changes or on long flights (for example before descent): it reads the cloud
+   layers of the active weather, so CloudSurf knows where decks start and end.
+   After you close the panel CloudSurf keeps the last layers it got. Without
+   them, CloudSurf only goes by being in cloud: clouds are not kept inside a
+   deck, and the colour is not lighter near its top.
 3. If another add-on also adds a wing fade or in-cloud effect, switch that off;
    otherwise you get both effects.
 
@@ -39,9 +40,13 @@ controls:
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
 | Performance | Auto | **Auto** picks the number of clouds (35 to 128, 8 per step) so your frame rate in cloud stays within 10 % of the frame rate just before it; **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
+| Cloud style | Classic + wisps | thin cloud mostly large, light wisps from cloud photos, thick cloud round clouds; or Classic only, or Wisps only |
 | Intensity | 100 % | how strong the whole effect is: how dense the clouds and the wing fade are, and with that how many clouds come; 0 is practically off |
-| Aircraft lights | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off) |
+| Spawn distance | 1000 m | how far ahead new clouds appear in thin cloud; in thick cloud half of it |
+| Aircraft lights (beta) | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off); doesn't really work yet |
 | Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
+
+**Hotkey:** Ctrl+Shift+C switches CloudSurf on and off (or bind `L:CLOUDSURF_ENABLE`).
 
 Everything else is under **Advanced**, among it:
 
@@ -70,8 +75,14 @@ clouds come (near cloud edges and in steep climbs or descents), staying inside
 the cloud layer of the current weather (150 m inside its top and base),
 which clouds stay or fade out when you leave a cloud, and the light from your
 aircraft. As soon as you are in a cloud, a wide, thin wall of small clouds
-comes first, about 600 m ahead, then the normal clouds. Thin cloud (below 3 %
-of the sim's density) gets only a very light effect.
+comes first, about 600 m ahead, then the normal clouds, and the cloud builds up
+over the first 400 m you fly in it. Thin cloud (below 3 % of the sim's density)
+gets only a very light effect: mostly large, light wisps that appear far ahead
+and come out of the haze slowly. Thick cloud gets denser round clouds that
+appear closer and come out of the murk near you, as in real cloud, where you
+see little. Every cloud fades in by distance: invisible where it appears, full
+from about a third of the way. Leaving a cloud, the clouds around you stay in
+place and fade, the wing fade within a second.
 
 **Calibrate** (under Advanced) tunes the look by hand per cloud density. While it is open its
 sliders act live (Auto FPS is off): cloud density, size, number of clouds,
@@ -84,9 +95,7 @@ replaces it. Between the stored points CloudSurf blends the values by density,
 beyond them the nearest point holds. Without points the normal settings apply.
 
 **Advanced** shows what is automatic with live values, the few fixed
-settings (cloud style, including the experimental wisps made from cloud photo
-textures; distance ahead where new clouds appear, 800 m and never closer than
-500 m; sideways and vertical
+settings (fade by distance from the camera or the aircraft; sideways and vertical
 spread; clouds per step; sim density for full thickness, 10 %; landing light
 direction) and debug tools (test mode, spawn and clear, live values, a log).
 
