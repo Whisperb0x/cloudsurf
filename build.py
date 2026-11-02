@@ -50,9 +50,9 @@ PANEL_XML = f"""<?xml version="1.0" encoding="utf-8"?>
 EFFECTS_PLACEHOLDER = "/*@EFFECTS@*/[]"
 
 # Effect kinds, as in CloudSurf.cpp: 2 = cloud effect (selectable),
-# 3 = landing light beam, 4 = wing fade (both attached to the aircraft, not
-# selectable).
-FX_CLOUD, FX_BEAM, FX_WING = 2, 3, 4
+# 3 = landing light beam, 4 = wing fade, 5 = its second layer of big flakes
+# (all attached to the aircraft, not selectable).
+FX_CLOUD, FX_BEAM, FX_WING, FX_WING_BIG = 2, 3, 4, 5
 
 
 def read_raw(path):
@@ -91,7 +91,8 @@ def own_effects():
         xml = read_raw(VFX_SRC / f"{name}.xml")
         m = re.search(r'<VisualEffect\.VisualEffect InstanceId="\{([0-9A-Fa-f-]+)\}"', xml)
         if m:
-            kind = FX_BEAM if name.endswith("Beam") else FX_WING if name.endswith("Wing") else FX_CLOUD
+            kind = (FX_BEAM if name.endswith("Beam") else FX_WING_BIG if name.endswith("WingBig")
+                    else FX_WING if name.endswith("Wing") else FX_CLOUD)
             effects.append((name, m.group(1).upper(), kind))
     if not effects:
         sys.exit(f"no effects found in {VFX_SRC}; run tools/make_cloud_vfx.py")

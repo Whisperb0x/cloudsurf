@@ -83,7 +83,8 @@ ATLAS_RATE, ATLAS_SIZE = 2.5, 26.0     # more, smaller wisps overlap into more d
 ATLAS_SPREAD_H, ATLAS_SPREAD_V = 18.0, 8.0
 
 # (effect name, uses the atlas material)
-EFFECTS = [("CloudSurf", False), ("CloudSurfWisps", True), ("CloudSurfBeam", "beam"), ("CloudSurfWing", "wing")]
+EFFECTS = [("CloudSurf", False), ("CloudSurfWisps", True), ("CloudSurfBeam", "beam"), ("CloudSurfWing", "wing"),
+           ("CloudSurfWingBig", "wingbig")]
 
 # Landing light beam: attached to the aircraft (local space), glowing mist
 # particles shot forward in a cone. Distance travelled grows with age, so
@@ -105,7 +106,15 @@ WING_SPEED = 40.0         # m/s backwards, relative to the aircraft (+-20% per f
 WING_TRAVEL = 60.0        # m: from the emitter to well behind the wings
 WING_CAPACITY = 160.0
 WING_SIZE = (3.0, 8.0)    # m, random per flake
-WING_TUBE = 3.0           # m radius of the tube along the span, through the aircraft's middle
+WING_TUBE = 10.0          # m radius of the tube along the span, through the aircraft's middle (3 m was a sheet)
+# The second layer (CloudSurfWingBig): fewer, bigger flakes in a much wider
+# tube, so there is cloud above and below the aircraft too, going back slower
+# than the small ones (parallax: the stream gets depth).
+WING_BIG_SIZE = (12.0, 28.0)
+WING_BIG_TUBE = 30.0
+WING_BIG_SPEED = 25.0
+WING_BIG_TRAVEL = 90.0
+WING_BIG_CAPACITY = 60.0
 WING_FADE_IN, WING_FADE_OUT = 0.15, 0.3   # share of the lifetime
 
 Z = "{00000000-0000-0000-0000-000000000000}"
@@ -510,8 +519,10 @@ def build_beam(name):
     return effect
 
 
-def build_wing(name):
+def build_wing(name, big=False):
     effect, emitter, init, update, output = (gid(n) for n in ("effect", "emitter", "init", "update", "output"))
+    size_rng, tube, w_speed, travel, capacity = ((WING_BIG_SIZE, WING_BIG_TUBE, WING_BIG_SPEED, WING_BIG_TRAVEL, WING_BIG_CAPACITY) if big
+                                                 else (WING_SIZE, WING_TUBE, WING_SPEED, WING_TRAVEL, WING_CAPACITY))
 
     rate = param("WingRate", 0.0, (-700, -300))      # flakes per second
     walpha = param("WingAlpha", 0.0, (-700, 100))    # 0..1 opacity
@@ -532,7 +543,7 @@ def build_wing(name):
     rad = math_node("MultiplyOperation", "rad",
                     math_node("PowOperation", "radsqrt", random("rr", 0.0, 1.0, pid, 3, (-900, -140)), None,
                               (-800, -140), yv=0.5),
-                    None, (-700, -140), yv=WING_TUBE)
+                    None, (-700, -140), yv=tube)
     sin_a, cos_a = out("sina"), out("cosa")
     node("Sin", "sina", f"            <OutputValue>{sin_a}</OutputValue>\n" + pin("x", ang, 0), (-800, -220))
     node("Cos", "cosa", f"            <OutputValue>{cos_a}</OutputValue>\n" + pin("x", ang, 0), (-800, -180))
@@ -541,8 +552,8 @@ def build_wing(name):
     start = vector3("startpos", [(x, 0), (y, 0), (z, 0)], (-500, -220))
     rrot = random("rrot", 0.0, 6.283, pid, 4, (-800, -60))
     rot = vector3("rot", [(None, 0), (None, 0), (rrot, 0)], (-600, -60))
-    rsize = random("rsize", WING_SIZE[0], WING_SIZE[1], pid, 5, (-800, 20))
-    speed = random("rspeed", -WING_SPEED * 1.2, -WING_SPEED * 0.8, pid, 6, (-800, 520))
+    rsize = random("rsize", size_rng[0], size_rng[1], pid, 5, (-800, 20))
+    speed = random("rspeed", -w_speed * 1.2, -w_speed * 0.8, pid, 6, (-800, 520))
     velocity = vector3("velocity", [(None, 0), (None, 0), (speed, 0)], (-600, 520))
     grow = lerp("growf", None, None, age, (-150, 400), xv=0.8, yv=1.0)
     upd_size = math_node("MultiplyOperation", "updsize", grow, src_size, (-50, 450))
@@ -572,7 +583,7 @@ def build_wing(name):
          "            </EmitterList>\n", (300, -100))
     node("Emitter", "emitter",
          pin("ParticleRate", rate, 0.0)
-         + f"            <Capacity>{f(WING_CAPACITY)}</Capacity>\n"
+         + f"            <Capacity>{f(capacity)}</Capacity>\n"
          + f"            <MaxDistanceEmission>{f(MAX_DISTANCE)}</MaxDistanceEmission>\n"
          "            <EmitInLocalSpace>True</EmitInLocalSpace>\n"
          "            <ParticleInit>\n"
@@ -582,7 +593,7 @@ def build_wing(name):
          "            <ParticleUpdate>\n"
          f'                <ObjectReference InstanceId="{update}" id="BlockParticleUpdate"/>\n'
          "            </ParticleUpdate>\n"
-         f"            <ParticleLifetime>\n    {pin('FloatIn', None, WING_TRAVEL / WING_SPEED)}            </ParticleLifetime>\n"
+         f"            <ParticleLifetime>\n    {pin('FloatIn', None, travel / w_speed)}            </ParticleLifetime>\n"
          f"            <ParticleSize>\n    {pin('FloatIn', rsize, 0)}            </ParticleSize>\n"
          f"            <ParticlePosition>\n                {float3(start)}\n            </ParticlePosition>\n"
          f"            <ParticleRotation>\n                {float3(rot)}\n            </ParticleRotation>\n"
@@ -611,6 +622,8 @@ def write():
             build_beam(name)
         elif atlas == "wing":
             build_wing(name)
+        elif atlas == "wingbig":
+            build_wing(name, big=True)
         else:
             build(name, atlas)
         doc = ('\ufeff<?xml version="1.0" encoding="UTF-8"?>\n\n'

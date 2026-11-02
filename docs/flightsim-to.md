@@ -54,6 +54,13 @@ add-on's effects.
 - No clouds within 200 ft of the ground: nothing on the take-off run in
   airport fog.
 - New switch under Advanced: *Clouds before a deck* (off = only in cloud).
+- Entering a cloud the clouds are around you at once and build up; leaving
+  it, nothing new is made, the clouds you passed stay where they are, only
+  the ones still ahead in clear air fade.
+- Wing fade with depth: a thicker stream of small flakes plus a second layer
+  of big flakes above and below the aircraft, going back slower. Its
+  brightness has its own setting (*Wing fade brightness*, 0.8x by default),
+  because flakes close to the camera come out lighter than the clouds.
 - Hotkey Ctrl+Shift+C switches CloudSurf on and off.
 - Smoother fades, a slow spin on the clouds, and two wisp textures with hard
   edges fixed.

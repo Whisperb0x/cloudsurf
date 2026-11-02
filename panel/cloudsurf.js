@@ -13,6 +13,7 @@
 		["INTENSITY",    "Intensity (0 = practically off)", 0, 100, 1, 100, "%"],
 		["GLOW",         "Aircraft lights (beta: glow in cloud)", 0, 30, 0.05, 0.85, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
+		["WING_TONE",    "Wing fade brightness (times the clouds')", 0.3, 1.5, 0.05, 0.8, "x"],
 		["LEAD_MAX",     "Spawn distance (thin cloud; thick cloud half of it)", 300, 2500, 10, 1000, "m"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],

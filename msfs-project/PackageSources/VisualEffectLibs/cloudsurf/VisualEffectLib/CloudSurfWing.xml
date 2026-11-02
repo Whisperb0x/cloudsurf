@@ -80,7 +80,7 @@
         <VisualEffect.MultiplyOperation InstanceId="{299DB7CF-EF71-56EA-8A17-9076387A2FEA}">
             <OutputValue>{054C1AA4-8FAD-5D4B-8371-6C9169B7DE78}</OutputValue>
             <xVariant>{70A1EC75-D449-5F8C-9B5B-9E32E26E50C3}, 0.000000</xVariant>
-            <yVariant>{00000000-0000-0000-0000-000000000000}, 3.000000</yVariant>
+            <yVariant>{00000000-0000-0000-0000-000000000000}, 10.000000</yVariant>
         </VisualEffect.MultiplyOperation>
         <VisualEffect.Sin InstanceId="{2C3B16D9-E016-55A8-82AF-3890275ED056}">
             <OutputValue>{8C11AFAA-5D6C-5F4E-9FB9-AD3EEE4905D4}</OutputValue>

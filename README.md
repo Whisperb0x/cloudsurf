@@ -56,6 +56,7 @@ Everything else is under **Advanced**, among it:
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, times the automatic brightness (darker in denser cloud and thicker decks) |
+| Wing fade brightness | 0.8x | the wing flakes' brightness, times the clouds'. They are close to the camera, where the sim's fog does not darken them as it does the clouds further off, so at 1.0x they come out lighter than the cloud around you |
 | Clouds before a deck | on | when you climb or descend towards a well covered layer, clouds start before you are in it (from 300 m above the ground); off = clouds only once the sim says you are in cloud |
 
 No clouds come within 60 m (200 ft) of the ground: fog at an airport counts

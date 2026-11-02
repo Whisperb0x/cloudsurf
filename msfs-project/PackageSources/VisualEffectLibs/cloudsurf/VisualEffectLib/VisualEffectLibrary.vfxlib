@@ -3,4 +3,5 @@
 	<VisualEffect File="CloudSurfWisps"/>
 	<VisualEffect File="CloudSurfBeam"/>
 	<VisualEffect File="CloudSurfWing"/>
+	<VisualEffect File="CloudSurfWingBig"/>
 </VisualEffectLibrary>
