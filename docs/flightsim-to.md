@@ -2,7 +2,8 @@
 
 Ready to paste into the add-on page (Description, FAQ, Changelog). Keep the
 Description that is there; add the FAQ after "Known limitations" and the
-changelog entry at the end.
+changelog entry at the end. The page's editor drops list markers, so every
+item is a paragraph of its own.
 
 ## FAQ (new section)
 
@@ -44,47 +45,22 @@ add-on's effects.
 
 **1.1**
 
-This update is mostly about the two things people wrote about most: clouds
-that seemed to appear out of nowhere, and clouds that came out dark. Thank
-you for the reports.
+Thanks for all the reports. This update is mostly about the two things people wrote about most: clouds that seemed to appear out of nowhere, and clouds that came out dark.
 
-Entering and leaving a cloud now happens the way the sim's own grey does.
-The moment you are in a cloud, the clouds are around you and ahead of you,
-and the effect builds up over the first few hundred metres instead of
-starting far ahead and arriving later. When you leave, nothing new is made
-from that moment on; the clouds you just flew through stay where they are
-behind you, and only the ones still ahead, in what is now clear air, fade.
-Seen from outside, the effect no longer trails the aircraft like a plume.
+In and out of cloud at once. The moment you are in a cloud, the clouds are around you and ahead of you, building up over the first few hundred metres. When you leave, nothing new is made; the clouds you flew through stay behind you, and only the ones still ahead in clear air fade. From outside, the effect no longer trails the aircraft like a plume.
 
-The wing fade has depth now. The small flakes stream through a thicker tube
-instead of a flat sheet in the plane of the wings, and a second layer of big
-flakes above and below the aircraft goes back more slowly, so the stream has
-parallax. Flakes close to the camera come out lighter than clouds further
-away, because the sim's fog does not reach them, so the wing fade has its own
-brightness setting (0.8x by default).
+Wing fade with depth. The small flakes stream through a thicker tube instead of a flat sheet, and a second layer of big flakes above and below the aircraft goes back more slowly. It has its own brightness setting (0.8x by default), because flakes close to the camera come out lighter than the clouds.
 
-The clouds are drawn in CloudSurf's own white material. Up to 1.0 they used
-the sim's default smoke material, whose colour multipliers are dark and
-brownish; that is where the dark and olive clouds came from. If they now look
-a little too light for your taste, Brightness under Advanced brings them
-down.
+White cloud material. Up to 1.0 the clouds used the sim's default smoke material, whose colour multipliers are dark and brownish: that is where the dark and olive clouds came from. Too light now? Brightness under Advanced brings them down.
 
-Nothing is placed within 200 ft of the ground any more. Fog at an airport
-counts as cloud in the sim, which put clouds on the take-off run. Clouds that
-start before a deck you are about to climb or descend into can be switched
-off under Advanced (Clouds before a deck), so that in scattered cloud you
-only get clouds once you are in one.
+No clouds near the ground. Nothing within 200 ft: fog at an airport counts as cloud in the sim, which put clouds on the take-off run.
 
-Clouds come in phases as in a real cloud, and the spawn distance follows the
-cloud: far ahead in thin cloud, half of that in thick cloud, every cloud
-fading in by distance so none pops. Thin cloud is now mostly large, light
-wisps ("Classic + wisps", the default), thick cloud round clouds.
+Clouds before a deck can be switched off (Advanced), so in scattered cloud you only get clouds once you are in one.
 
-The panel is simpler. The main page has the on/off switch, the Performance
-preset and five sliders: wing fade, cloud size, build-up after entering,
-spawn distance and fade-out after leaving. Advanced sits next to the presets
-and shows every setting in one list, where what you set is your own. The
-hotkey Ctrl+Shift+C switches CloudSurf on and off.
+Cloud phases. The spawn distance follows the cloud: far ahead in thin cloud, half of that in thick cloud, every cloud fading in by distance so none pops. Thin cloud is now mostly large, light wisps (Classic + wisps, the default), thick cloud round clouds.
 
-Smaller things: smoother fades, a slow spin on the clouds, and two wisp
-textures with hard edges fixed.
+A simpler panel. On/off, the Performance preset and five sliders: wing fade, cloud size, build-up after entering, spawn distance and fade-out after leaving. Advanced sits next to the presets and shows every setting in one list.
+
+Hotkey Ctrl+Shift+C switches CloudSurf on and off.
+
+Smaller things: smoother fades, a slow spin on the clouds, and two wisp textures with hard edges fixed.
