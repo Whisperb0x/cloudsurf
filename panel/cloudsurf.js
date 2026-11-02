@@ -49,6 +49,7 @@
 		["CAM_FADE", "csCamFade", 1],
 		["TEST",     "csTest",    0],
 		["LIT",      "csLit",     1],
+		["AHEAD",    "csAhead",   1],
 	];
 	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
 

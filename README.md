@@ -56,6 +56,10 @@ Everything else is under **Advanced**, among it:
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |
 | Brightness | 1.0x | cloud brightness, times the automatic brightness (darker in denser cloud and thicker decks) |
+| Clouds before a deck | on | when you climb or descend towards a well covered layer, clouds start before you are in it (from 300 m above the ground); off = clouds only once the sim says you are in cloud |
+
+No clouds come within 60 m (200 ft) of the ground: fog at an airport counts
+as cloud in the sim, and clouds rushing past on the take-off run look wrong.
 
 Clouds come in random sizes and orientations and come at you from far ahead,
 many of them, spread evenly through a box 100 m either side and 100 m above
@@ -101,6 +105,33 @@ direction) and debug tools (test mode, spawn and clear, live values, a log).
 
 All settings are `L:CLOUDSURF_*` variables, so other tools (MobiFlight,
 SPAD.neXt, …) can drive them too. See `kConfigVars` in `src/CloudSurf.cpp`.
+
+## Questions people ask
+
+- **Clouds appear out of thin air in front of me.** CloudSurf only knows the
+  cloud you are in (the sim reports nothing ahead), so it places clouds ahead
+  of you as you enter, and before a deck you are about to climb or descend
+  into. In scattered cloud that shows. Turn off *Clouds before a deck* under
+  Advanced to get clouds only once you are in one, or lower *Spawn distance*.
+  A version that reads the sim's own cloud volume ahead of you is in the
+  works.
+- **Clouds on the runway.** Fixed in 1.1: nothing within 200 ft of the ground.
+- **Does it work with GFX?** Yes. Turn off GFX's wing fade (you would get
+  both), keep the rest.
+- **With AtmosphereMod, REX, ActiveSky?** They change the sim's weather and
+  clouds; CloudSurf reads the result, so they go together. If the clouds look
+  off, try CloudSurf alone once to tell which is which.
+- **MSFS 2020?** No. CloudSurf uses the 2024 WASM API for effects; the module
+  does not load in 2020.
+- **The toolbar button is missing.** Enable it in the toolbar settings (the
+  pencil icon). Open the panel once per flight so CloudSurf knows the deck.
+- **The clouds are dark or olive.** Up to 1.0 the clouds were drawn in the
+  sim's default smoke material, which has dark, brownish colour multipliers.
+  1.1 uses its own white material. If they are still too dark, raise
+  *Brightness* under Advanced.
+- **Wing fade does nothing.** It follows the clouds around you: thin cloud
+  gives little. Raise *Intensity* or the *Wing fade* slider; in thick cloud
+  it should be clearly there.
 
 ## How it works
 

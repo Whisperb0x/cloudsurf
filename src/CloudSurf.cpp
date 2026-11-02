@@ -104,7 +104,7 @@ const char* const kToggleKey = "VK_LCONTROL+VK_LSHIFT+C";
 // the sim on its own; the fixed values for that are the constants below.
 struct Config {
 	double enable, lead_max, lateral, vertical, full_pct, max_alive, mult, cluster,
-	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps, intensity;
+	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps, intensity, ahead;
 };
 
 struct ConfigVar { const char* name; double def; double Config::* field; };
@@ -127,6 +127,7 @@ const ConfigVar kConfigVars[] = {
 	{ "BRIGHT",     1.0,   &Config::bright },     // cloud brightness, times the automatic one (see UpdateTone)
 	{ "CAM_FADE",   1.0,   nullptr },             // 1 = clouds fade by distance from the camera, 0 = from the aircraft (read by the effect)
 	{ "LIT",        1.0,   &Config::lit },        // 1 = lit by the sim's light (it decides how dark), 0 = unlit (experimental)
+	{ "AHEAD",      1.0,   &Config::ahead },      // 1 = clouds already before a deck you climb or descend into (see LayerAhead), 0 = only in cloud
 	{ "TEST",       0.0,   &Config::test },       // 1 = test clouds in clear sky
 	{ "TEST_DENS",  1.0,   &Config::test_dens },  // their density 0..1
 	{ "EFFECT",     -1.0,  &Config::effect },     // index into kEffects, -1 = Classic + wisps (mostly wisps in thin cloud)
@@ -141,6 +142,13 @@ const ConfigVar kConfigVars[] = {
 // Fixed values.
 const double kMinPct = 0.3;          // sim cloud density (%) below which no clouds come
 const double kMinSpeed = 25.0;       // m/s, no clouds below this
+// No clouds this close to the ground: fog at an airport counts as cloud in
+// the sim, and clouds rushing past on the take-off run look wrong (reported
+// on flightsim.to, Nov 2026). A deck's clouds end that high above the ground.
+const double kMinAgl = 60.0;         // m
+// Clouds before a deck (LayerAhead) only from this height: low over the ground
+// the layers are least reliable, and clouds in clear air there look wrong.
+const double kAheadMinAgl = 300.0;   // m
 // Entering a cloud, first a wide, thin wall of small clouds (see SpawnEntryWave).
 const double kEntryWave = 600.0, kEntryWaveDepth = 120.0;  // m ahead, and deep
 const double kEntryWaveWide = 3.0;   // times the box width (LATERAL)
@@ -1186,8 +1194,9 @@ void Update() {
 	// In the sim's cloud just outside the band: still that deck, so clouds
 	// stay inside it instead of appearing below or above us.
 	if (!test && in_cloud && g_layer_now < 0) g_layer_now = NearestLayer(a.alt_m, kNearLayer);
+	double agl = a.alt_m - a.ground_m;
 	int ahead = -1;
-	if (!test && !in_cloud && g_layer_now < 0) ahead = LayerAhead(a, g_cfg.lead_max);
+	if (!test && !in_cloud && g_layer_now < 0 && g_cfg.ahead > 0.5 && agl >= kAheadMinAgl) ahead = LayerAhead(a, g_cfg.lead_max);
 	if (ahead >= 0) {
 		g_layer_now = ahead;
 		g_mix = g_last_mix;
@@ -1217,7 +1226,7 @@ void Update() {
 	SetL("DECK_TOP", g_layer_now >= 0 ? LayerTop(g_layer_now) / kFtToM : 0.0);
 	SetL("DECK_BOT", g_layer_now >= 0 ? LayerBot(g_layer_now) / kFtToM : 0.0);
 
-	bool active = g_cfg.enable > 0.5 && a.speed >= kMinSpeed && (test || in_cloud || ahead >= 0);
+	bool active = g_cfg.enable > 0.5 && a.speed >= kMinSpeed && (test || (agl >= kMinAgl && (in_cloud || ahead >= 0)));
 	if (active) g_last_active = a.time;
 
 	if (in_cloud) g_in_dist += a.speed * dt;

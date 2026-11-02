@@ -3,8 +3,9 @@ msfs-project, then build it in the sim (Project Editor: Build All).
 
   python tools/make_cloud_vfx.py [PROJECT_EFFECT_DIR]
 
-Built like a steam or smoke effect: default smoke material, few large soft
-particles whose size grows with sqrt(age) and whose alpha fades out. Changes:
+Built like a steam or smoke effect: few large soft particles whose size grows
+with sqrt(age) and whose alpha fades out, in our own white material (see
+SOFT_MATERIAL). Changes:
 no rise, drift with the wind, and graph parameters CloudSurf sets per spawn:
 
   CloudDensity  0..1  thin = light and see-through, dense = opaque and darker
@@ -70,6 +71,11 @@ GLOW_FLATTEN = 3.0                     # vertical distance counts this much more
 # small tilt. They are a light accent next to the main clouds, so they are
 # much fainter. (Cylindrical billboards, which stay level, looked like flat cards.)
 ATLAS_MATERIAL = "{E10A36EB-4E91-4B0E-92DF-01130D2942B4}"
+# The round clouds and the wing flakes: our own white, soft material
+# (MaterialLib, CloudSoft.material, textures/CloudSoft.png from
+# tools/make_soft_texture.py). The sim's default smoke material has dark,
+# brownish colour multipliers: in cloud our clouds came out dark and olive.
+SOFT_MATERIAL = "{3B7F0C2A-9D64-4E1B-8F27-5A1C6E0D9B42}"
 ATLAS_CELLS = 4
 ATLAS_TILT = 0.25                      # rad, random tilt either way
 ATLAS_ALPHA = 0.4                      # opacity of the wisps relative to the main clouds
@@ -428,7 +434,7 @@ def build(name, atlas):
          "            </ParticleOutput>\n"
          f"            <ParticleVelocity>\n                {float3(drift)}\n            </ParticleVelocity>\n"
          f"            <ParticleSize>\n    {pin('FloatIn', upd_size, 0)}            </ParticleSize>\n", (300, 420))
-    material = ""
+    material = f"            <Material>{SOFT_MATERIAL}</Material>\n"
     if atlas:
         material = (f"            <Material>{ATLAS_MATERIAL}</Material>\n"
                     "            <UVMode>Atlas</UVMode>\n"
@@ -587,6 +593,7 @@ def build_wing(name):
          "            </ParticleOutput>\n"
          f"            <ParticleSize>\n    {pin('FloatIn', upd_size, 0)}            </ParticleSize>\n", (300, 420))
     node("Output", "output",
+         f"            <Material>{SOFT_MATERIAL}</Material>\n"
          f"            <ParticleColor>\n                <ColorIn>{colour}, 0, 0, 0, 0</ColorIn>\n"
          "            </ParticleColor>\n"
          f"            <MaterialEmissiveColor>\n                <ColorIn>{emissive}, 0, 0, 0, 0</ColorIn>\n"
