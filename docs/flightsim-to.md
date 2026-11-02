@@ -61,6 +61,10 @@ add-on's effects.
   of big flakes above and below the aircraft, going back slower. Its
   brightness has its own setting (*Wing fade brightness*, 0.8x by default),
   because flakes close to the camera come out lighter than the clouds.
+- A simpler panel: on/off, the Performance preset and five sliders (wing
+  fade, cloud size, build-up after entering, spawn distance, fade-out after
+  leaving). Everything else is under Advanced, where your settings override
+  the preset.
 - Hotkey Ctrl+Shift+C switches CloudSurf on and off.
 - Smoother fades, a slow spin on the clouds, and two wisp textures with hard
   edges fixed.

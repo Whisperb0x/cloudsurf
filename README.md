@@ -40,18 +40,24 @@ controls:
 |---|---|---|
 | Fly through clouds | on | CloudSurf on/off |
 | Performance | Auto | **Auto** picks the number of clouds (35 to 128, 8 per step) so your frame rate in cloud stays within 10 % of the frame rate just before it; **Performance** 35 clouds at once, 6 per step; **Balanced** 60, 8 per step; **Quality** 100, 10 per step |
-| Cloud style | Classic + wisps | thin cloud mostly large, light wisps from cloud photos, thick cloud round clouds; or Classic only, or Wisps only |
-| Intensity | 100 % | how strong the whole effect is: how dense the clouds and the wing fade are, and with that how many clouds come; 0 is practically off |
+| Wing fade | 1.0x | cloud flakes streaming over the wings in cloud (0 = off) |
+| Cloud size | 1.65x | size of all clouds |
+| Build-up after entering | 250 m | the metres you fly in a cloud over which the effect grows from 30 % to full |
 | Spawn distance | 1000 m | how far ahead new clouds appear in thin cloud; in thick cloud half of it |
-| Aircraft lights (beta) | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off); doesn't really work yet |
-| Wing fade | 1.0x | small cloud flakes streaming over the wings in cloud (0 = off) |
+| Fade-out after leaving | 1.5 s | how fast the clouds still ahead of you fade when you leave a cloud (the ones around and behind you stay) |
+
+Everything else is under **Advanced**; what you set there overrides the
+Performance preset (the preset goes to "custom").
 
 **Hotkey:** Ctrl+Shift+C switches CloudSurf on and off (or bind `L:CLOUDSURF_ENABLE`).
 
-Everything else is under **Advanced**, among it:
+Among the Advanced settings:
 
 | Setting | Default | What it does |
 |---|---|---|
+| Cloud style | Classic + wisps | thin cloud mostly large, light wisps from cloud photos, thick cloud round clouds; or Classic only, or Wisps only |
+| Intensity | 100 % | how strong the whole effect is: how dense the clouds and the wing fade are, and with that how many clouds come; 0 is practically off |
+| Aircraft lights (beta) | 0.85x | how strongly clouds near your lights glow, up to 30x (0 = off); doesn't really work yet |
 | Clouds around you | 128 | how many clouds exist at once (with Auto: at most); moving it makes the preset "custom" (Auto off) |
 | Thickness | 2.0x | how opaque and dark the clouds get (they also follow the sim's cloud density) |
 | Size | 1.65x | size of all clouds |

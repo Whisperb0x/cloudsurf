@@ -104,7 +104,7 @@ const char* const kToggleKey = "VK_LCONTROL+VK_LSHIFT+C";
 // the sim on its own; the fixed values for that are the constants below.
 struct Config {
 	double enable, lead_max, lateral, vertical, full_pct, max_alive, mult, cluster,
-	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps, intensity, ahead, wing_tone;
+	       size, glow, test, test_dens, effect, beam, beam_fwd, beam_up, wing, bright, lit, autofps, intensity, ahead, wing_tone, exit_fade, entry_ramp;
 };
 
 struct ConfigVar { const char* name; double def; double Config::* field; };
@@ -115,7 +115,9 @@ const ConfigVar kConfigVars[] = {
 	{ "ENABLE",     1.0,   &Config::enable },     // 0 = off
 	{ "INTENSITY",  100.0, &Config::intensity },  // % of the full effect: density (so also wing fade) and, through it, the number of clouds; 0 = off
 	{ "AUTO",       1.0,   &Config::autofps },    // 1 = number of clouds keeps the frame rate (see UpdateAutoFps), up to MAX_ALIVE
-	{ "LEAD_MAX",   1000.0, &Config::lead_max },  // m ahead where new clouds appear in thin cloud; thick cloud down to kLeadThick of it (closer near edges too)
+	{ "LEAD_MAX",   1000.0, &Config::lead_max },
+	{ "ENTRY_RAMP", 250.0, &Config::entry_ramp }, // m flown in a cloud over which the effect builds up to full (from kEntryStart of it)
+	{ "EXIT_FADE",  1.5,   &Config::exit_fade },  // s the clouds still ahead take to fade when we leave a cloud (the ones around us stay)  // m ahead where new clouds appear in thin cloud; thick cloud down to kLeadThick of it (closer near edges too)
 	{ "LATERAL",    100.0, &Config::lateral },    // m sideways spread
 	{ "VERTICAL",   100.0, &Config::vertical },   // m up/down spread
 	{ "FULL_PCT",   10.0,  &Config::full_pct },   // sim cloud density (%) for full thickness
@@ -166,7 +168,7 @@ const double kMixLo = 0.3, kMixHi = 0.8;  // Classic + wisps: wisps only in thin
 const double kTestInterval = 1.0;    // s between test clouds
 // Each cloud fades on its own (CloudFade): in when it appears, slower for the
 // first clouds when entering a cloud, and out when it must go before we pass it.
-const double kFadeInSpawn = 0.8, kFadeInEntry = 2.0, kFadeOutPuff = 1.5;  // s
+const double kFadeInSpawn = 0.8, kFadeInEntry = 2.0, kFadeOutPuff = 1.5;  // s (the fade-out is EXIT_FADE; kFadeOutPuff only when switched off)
 const double kExitKeepTime = 1.0;    // s of flight ahead whose clouds stay when we leave a cloud (the ones beyond fade)
 
 enum PuffState { PUFF_FREE, PUFF_LIVE, PUFF_FADING, PUFF_STOPPING };
@@ -228,11 +230,11 @@ double g_last_mix = 0.6;           // density curve value of the last cloud, for
 // Density all clouds follow (L:CLOUDSURF_DENS_LIVE): the current one in cloud;
 // after leaving, the last one is held for the clouds that stay, then let go.
 // Entering a cloud it builds up: from kEntryStart of it over the first
-// kEntryRamp metres flown in cloud (smoothly), as the cloud closes in around
+// ENTRY_RAMP metres flown in cloud (smoothly), as the cloud closes in around
 // you (the sim's own density is there in half a second, see the logs of
 // 27-28 Oct 2026: 80 % of its level within 0.5 s / ~90 m, flat after that).
 double g_dens_live = 0.0;
-const double kEntryStart = 0.3, kEntryRamp = 250.0;  // -, m
+const double kEntryStart = 0.3;  // the ramp's length: ENTRY_RAMP
 double g_in_dist = 0.0;  // m flown in this cloud
 const double kDensHold = 0.5, kDensRelease = 1.5;  // s
 
@@ -392,7 +394,7 @@ void StopPuff(Puff& p, double now) {
 	p.stop_time = now;
 }
 
-// Fade a cloud out over kFadeOutPuff, starting after `delay` s (its CloudFade
+// Fade a cloud out over EXIT_FADE, starting after `delay` s (its CloudFade
 // reads L:CLOUDSURF_OUT<n>).
 void FadeOutPuff(Puff& p, double now, double delay = 0.0) {
 	if (p.state != PUFF_LIVE) return;
@@ -692,8 +694,8 @@ bool SpawnPuff(const Aircraft& a, double dens, double lead, double fade_in, int 
 		SetL(out_name, 1e9);
 		snprintf(slot->fade, sizeof(slot->fade),
 		         "(L:CLOUDSURF_SHOW, number) (E:SIMULATION TIME, seconds) %.3f - %.2f / 0 max 1 min * "
-		         "1 (E:SIMULATION TIME, seconds) (L:CLOUDSURF_%s, number) - %.2f / 0 max 1 min - *",
-		         a.time, fade_in, out_name, kFadeOutPuff);
+		         "1 (E:SIMULATION TIME, seconds) (L:CLOUDSURF_%s, number) - (L:CLOUDSURF_EXIT_FADE, number) 0.2 max / 0 max 1 min - *",
+		         a.time, fade_in, out_name);
 		static const char* kLightNames[3] = { "LightX", "LightY", "LightZ" };
 		static const char* kBeamNames[3] = { "BeamX", "BeamY", "BeamZ" };
 		for (int i = 0; i < 3; ++i) {
@@ -1259,7 +1261,7 @@ void Update() {
 
 	if (in_cloud) g_in_dist += a.speed * dt;
 	else if (a.time - g_last_cloudy >= kExitHold) g_in_dist = 0.0;  // a real exit, not a short gap
-	double ramp = fmin(1.0, g_in_dist / kEntryRamp);
+	double ramp = fmin(1.0, g_in_dist / fmax(20.0, g_cfg.entry_ramp));
 	double entry_k = kEntryStart + (1.0 - kEntryStart) * ramp * ramp * (3.0 - 2.0 * ramp);
 	SetL("ENTRY", entry_k);
 	if (test) g_dens_live = test_dens;
@@ -1292,7 +1294,7 @@ void Update() {
 			else ++live;
 		}
 		bool gone = (p.state == PUFF_STOPPING && (a.time - p.stop_time > 6.0 || !fsVfxIsInstancePlaying(p.id))) ||
-		            (p.state == PUFF_FADING && a.time - p.stop_time > kFadeOutPuff + 0.3);
+		            (p.state == PUFF_FADING && a.time - p.stop_time > fmax(kFadeOutPuff, g_cfg.exit_fade) + 0.3);
 		if (gone) {
 			fsVfxDestroyInstance(p.id);
 			p.state = PUFF_FREE;

@@ -4,17 +4,19 @@
 	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
 	// show on the main page (kept simple); the rest are under "Advanced".
 	// Everything else follows the sim on its own (see the Automatic box).
-	const MAIN = ["INTENSITY", "LEAD_MAX", "GLOW", "WING"];
+	const MAIN = ["WING", "SIZE", "ENTRY_RAMP", "LEAD_MAX", "EXIT_FADE"];
 	const SLIDERS = [
 		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
 		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
-		["SIZE",         "Size",                  0.5, 2.5, 0.05, 1.65, "x"],
+		["SIZE",         "Cloud size",            0.5, 2.5, 0.05, 1.65, "x"],
 		["BRIGHT",       "Brightness (times the automatic one)", 0.2, 3, 0.05, 1.0, "x"],
 		["INTENSITY",    "Intensity (0 = practically off)", 0, 100, 1, 100, "%"],
 		["GLOW",         "Aircraft lights (beta: glow in cloud)", 0, 30, 0.05, 0.85, "x"],
 		["WING",         "Wing fade", 0, 2, 0.05, 1.0, "x"],
 		["WING_TONE",    "Wing fade brightness (times the clouds')", 0.3, 1.5, 0.05, 0.8, "x"],
+		["ENTRY_RAMP",   "Build-up after entering a cloud", 50, 800, 10, 250, "m"],
 		["LEAD_MAX",     "Spawn distance (thin cloud; thick cloud half of it)", 300, 2500, 10, 1000, "m"],
+		["EXIT_FADE",    "Fade-out after leaving (the clouds still ahead)", 0.3, 5, 0.1, 1.5, "s"],
 		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
 		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],
 		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
@@ -141,7 +143,9 @@
 	}
 
 	function buildSliders() {
-		SLIDERS.forEach(([key, label, min, max, step, , unit]) => {
+		// the main page's sliders in MAIN's order, then the rest
+		const ordered = [...MAIN.map(k => SLIDERS.find(s => s[0] === k)), ...SLIDERS.filter(s => !MAIN.includes(s[0]))];
+		ordered.forEach(([key, label, min, max, step, , unit]) => {
 			const box = $(MAIN.includes(key) ? "csMain" : "csSliders");
 			const row = document.createElement("div");
 			row.className = "ctrl-master-intensity cs-row";
