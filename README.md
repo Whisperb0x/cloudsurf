@@ -46,8 +46,10 @@ controls:
 | Spawn distance | 1000 m | how far ahead new clouds appear in thin cloud; in thick cloud half of it |
 | Fade-out after leaving | 1.5 s | how fast the clouds still ahead of you fade when you leave a cloud (the ones around and behind you stay) |
 
-Everything else is under **Advanced**; what you set there overrides the
-Performance preset (the preset goes to "custom").
+**Advanced**, the fifth Performance button, shows every setting in place of
+these five, with what is automatic, Calibrate and the debug tools. What you
+set there is your own: a preset's clouds-and-steps values stay until you move
+them, and moving them keeps you in Advanced.
 
 **Hotkey:** Ctrl+Shift+C switches CloudSurf on and off (or bind `L:CLOUDSURF_ENABLE`).
 

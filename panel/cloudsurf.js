@@ -189,10 +189,34 @@
 
 	const setOn = (el, on) => (on ? el.classList.add("cs-on") : el.classList.remove("cs-on"));
 
+	// Advanced is the fifth Performance button: your own settings ("custom")
+	// and the whole list in place of the main page's few sliders, with what
+	// is automatic, Calibrate and the debug tools. A preset closes it again.
+	let advancedOpen = false;
+
+	function setAdvancedView(open) {
+		if (open === advancedOpen) return;
+		advancedOpen = open;
+		const rows = MAIN.map(key => $("cs_" + key).closest(".cs-row"));
+		if (open) rows.reverse().forEach(row => $("csSliders").insertBefore(row, $("csSliders").firstChild));
+		else rows.forEach(row => $("csMain").appendChild(row));
+		$("csMain").style.display = open ? "none" : "block";
+		$("csDebug").style.display = open ? "block" : "none";
+		// Calibrate lives under Advanced: leaving it ends live tuning too
+		if (!open && $("csCalOpen").checked) {
+			$("csCalOpen").checked = false;
+			$("csCalOpen").dispatchEvent(new Event("change"));
+		}
+	}
+
 	function showChoices() {
 		const effect = valueOf("EFFECT"), preset = valueOf("PRESET");
-		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
-			setOn(b, b.getAttribute("data-preset") === preset));
+		const advanced = preset === "custom";
+		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b => {
+			const name = b.getAttribute("data-preset");
+			setOn(b, name === "advanced" ? advanced : name === preset);
+		});
+		setAdvancedView(advanced);
 		$("csEffectName").textContent = `${effect + 2}/${EFFECTS.length + 1}  ${effectLabel(effect)}`;
 	}
 
@@ -210,6 +234,12 @@
 	}
 
 	function setPreset(name) {
+		if (name === "advanced") {  // your own settings: nothing changes, the whole list shows
+			settings.PRESET = "custom";
+			save();
+			showChoices();
+			return;
+		}
 		settings.PRESET = name;
 		Object.keys(PRESETS[name]).forEach(key => {
 			settings[key] = PRESETS[name][key];
@@ -584,15 +614,6 @@
 		showChoices();
 		applyAll();
 		startLayers();
-		$("csShowDebug").addEventListener("change", () => {
-			const open = $("csShowDebug").checked;
-			$("csDebug").style.display = open ? "block" : "none";
-			// Calibrate lives under Advanced: closing it ends live tuning too
-			if (!open && $("csCalOpen").checked) {
-				$("csCalOpen").checked = false;
-				$("csCalOpen").dispatchEvent(new Event("change"));
-			}
-		});
 		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
 			b.addEventListener("click", () => setPreset(b.getAttribute("data-preset"))));
 		$("csEffectPrev").addEventListener("click", () => stepEffect(-1));
