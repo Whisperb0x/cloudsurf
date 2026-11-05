@@ -1,0 +1,156 @@
+                                <!-- CloudSurf: begin -->
+                                <div class="cs-topline">
+                                    <div>
+                                        <p class="cs-overline">FLIGHT EFFECTS</p>
+                                        <h2 class="cs-title">Cloud interaction</h2>
+                                    </div>
+                                    <span class="cs-version"><span class="cs-version-dot"></span>MSFS 2020</span>
+                                </div>
+
+                                <div class="cs-status" id="csStatus">
+                                    <span class="cs-dot" id="csDot"></span>
+                                    <div class="cs-status-text">
+                                        <p class="cs-status-main" id="csStatusMain">Waiting for the sim</p>
+                                        <p class="cs-status-sub" id="csStatusSub">-</p>
+                                    </div>
+                                </div>
+
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="ctrl-master-toggle">
+                                        <div class="cs-toggle-copy">
+                                            <p>Fly through clouds</p>
+                                            <span>Enable CloudSurf effects in cloud</span>
+                                        </div>
+                                        <label class="cs-switch">
+                                            <input type="checkbox" id="csEnable" checked aria-label="Enable Fly through clouds" />
+                                            <span class="cs-switch-track"></span>
+                                        </label>
+                                    </div>
+
+                                    <div class="cs-section-head">
+                                        <div>
+                                            <p class="cs-label">Performance profile</p>
+                                            <p class="cs-caption">Pick the cloud count that suits your frame rate</p>
+                                        </div>
+                                        <span class="cs-profile-chip" id="csProfileChip">AUTO</span>
+                                    </div>
+                                    <div class="cs-seg" id="csPreset">
+                                        <button type="button" class="cs-seg-btn" data-preset="auto" aria-pressed="false">Auto<span>adapts to FPS</span></button>
+                                        <button type="button" class="cs-seg-btn" data-preset="performance" aria-pressed="false">Performance<span>35 cloud limit</span></button>
+                                        <button type="button" class="cs-seg-btn" data-preset="balanced" aria-pressed="false">Balanced<span>60 clouds</span></button>
+                                        <button type="button" class="cs-seg-btn" data-preset="quality" aria-pressed="false">Quality<span>100 clouds</span></button>
+                                        <button type="button" class="cs-seg-btn" data-preset="advanced" aria-pressed="false">Advanced<span>all settings</span></button>
+                                    </div>
+
+                                    <div class="cs-quick-head">
+                                        <p class="cs-label">Quick adjustments</p>
+                                        <span>Changes save automatically</span>
+                                    </div>
+                                    <div id="csMain"></div>
+                                    <p class="cs-hint">Hotkey: Ctrl+Shift+C switches CloudSurf on and off.</p>
+                                </div>
+
+                                <div id="csDebug" style="display: none;">
+                                <p class="ctrl-section-label">Automatic (follows the sim)</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <ul class="cs-auto">
+                                        <li>Starts as soon as you are in a cloud: clouds around you and up to a wide, thin wall of small clouds about 600 m ahead, then the normal clouds beyond it; the cloud builds up over the first metres flown in it (Build-up)</li>
+                                        <li>Thin cloud: mostly large, very light wisps that appear far ahead (spawn distance) and come out of the haze slowly; thick cloud: denser round clouds that appear closer (half the spawn distance) and come out of the murk near you, as in real cloud where you see little</li>
+                                        <li>Thickness and darkness of every cloud follow the sim's cloud density around you, live, all the time; the number of clouds follows it too</li>
+                                        <li>Near edges (density changing fast) and in steep climbs or descents, new clouds come closer</li>
+                                        <li>Clouds stay inside the cloud layer of the current weather, from 150 m above its base to 150 m below its top; nothing is remembered from earlier decks</li>
+                                        <li>Thin cloud (below 3 % sim density) gets only a very light effect: fewer, fainter clouds</li>
+                                        <li>Leaving a cloud: no new clouds or flakes from that moment; the clouds around and behind you stay where they are, only the ones further ahead fade out (over Fade-out after leaving), and the ones above or below you when you leave through the top or base</li>
+                                        <li>The MSFS 2020 port uses world-spawned cloud effects; aircraft-attached wing and beam effects are disabled for compatibility</li>
+                                        <li>Auto (Performance): the number of clouds is set so your frame rate in cloud stays within 10 % of the frame rate just before it, with at least 35 clouds; what it finds is kept for the next cloud</li>
+                                        <li>Clouds are spread evenly through the whole box around your path: beside, above and below you, without clumps or empty sides; new ones fade in with distance, coming out of the fog instead of popping up</li>
+                                        <li>Colour: a light grey lit by the sim's own light, darker the denser the cloud and the thicker the deck (from a calibration flight), lighter in the upper part of the deck; Brightness scales it</li>
+                                        <li>Size, heading and density differ per cloud; drifting with the wind; glow from your lights</li>
+                                    </ul>
+                                    <div class="cs-grid">
+                                        <span>Auto FPS</span><span id="csAutoFps" class="cs-val">-</span>
+                                        <span>New clouds at</span><span id="csLeadNow" class="cs-val">-</span>
+                                        <span>Cloud brightness</span><span id="csTone" class="cs-val">-</span>
+                                        <span>Density change</span><span id="csChange" class="cs-val">-</span>
+                                        <span>Cloud layers</span><span id="csLayers" class="cs-val">-</span>
+                                        <span>Deck here</span><span id="csDeck" class="cs-val">-</span>
+                                    </div>
+                                </div>
+
+                                <p class="ctrl-section-label">Settings</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="cs-effect">
+                                        <p>Cloud style</p>
+                                        <button class="cs-btn" id="csEffectPrev">&lt;</button>
+                                        <span class="cs-val" id="csEffectName">-</span>
+                                        <button class="cs-btn" id="csEffectNext">&gt;</button>
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Lit by the sim's light (off = unlit, experimental)</p>
+                                        <input type="checkbox" id="csLit" />
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Clouds already before a deck you climb or descend into (off = only in cloud)</p>
+                                        <input type="checkbox" id="csAhead" checked />
+                                    </div>
+                                    <div id="csSliders"></div>
+                                </div>
+
+                                <p class="ctrl-section-label">Calibrate</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="ctrl-master-toggle">
+                                        <p>Calibrate: tune the look per cloud density</p>
+                                        <input type="checkbox" id="csCalOpen" />
+                                    </div>
+                                    <div id="csCal" style="display: none;">
+                                    <p class="cs-hint">While this is open the sliders below act live (Auto FPS is off). Fly in a cloud, tune, then Confirm: the values are stored for this cloud density. Between stored points CloudSurf blends them by density.</p>
+                                    <div class="cs-grid">
+                                        <span>Sim density here</span><span id="csCalPct" class="cs-val">-</span>
+                                        <span>Frame rate</span><span id="csCalFps" class="cs-val">-</span>
+                                        <span>Clouds reach</span><span id="csCalReach" class="cs-val">-</span>
+                                    </div>
+                                    <div class="ctrl-master-toggle">
+                                        <p>Standard clouds</p>
+                                        <input type="checkbox" id="csCalClassic" />
+                                    </div>
+                                    <div id="csCalSliders"></div>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn cs-btn-main" id="csCalConfirm">Confirm</button>
+                                        <button class="cs-btn" id="csCalLoad">Load values for here</button>
+                                    </div>
+                                    <p class="cs-label">Stored points</p>
+                                    <div id="csCalList"></div>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn" id="csCalClear">Delete all points</button>
+                                    </div>
+                                    </div>
+                                </div>
+
+                                <p class="ctrl-section-label">Debug</p>
+                                <div class="ctrl-master-big cs-box">
+                                    <div class="ctrl-master-toggle">
+                                        <p>Test mode (spawn also in clear sky)</p>
+                                        <input type="checkbox" id="csTest" />
+                                    </div>
+                                    <div class="cs-buttons">
+                                        <button class="cs-btn" id="csSpawnNow">Spawn one now</button>
+                                        <button class="cs-btn" id="csClear">Clear all</button>
+                                        <button class="cs-btn" id="csReset">Reset to defaults</button>
+                                    </div>
+                                    <div class="cs-grid">
+                                        <span>Module</span><span id="csRunning" class="cs-val">-</span>
+                                        <span>State</span><span id="csState" class="cs-val">-</span>
+                                        <span>In cloud</span><span id="csInCloud" class="cs-val">-</span>
+                                        <span>MSFS / effect density</span><span id="csCloudPct" class="cs-val">-</span>
+                                        <span>Patch density</span><span id="csDens" class="cs-val">-</span>
+                                        <span>Fade</span><span id="csFade" class="cs-val">-</span>
+                                        <span>Clouds alive</span><span id="csActive" class="cs-val">-</span>
+                                        <span>Spawned</span><span id="csSpawns" class="cs-val">-</span>
+                                        <span>Failed spawns</span><span id="csFails" class="cs-val">-</span>
+                                        <span>Camera</span><span id="csCamera" class="cs-val">-</span>
+                                        <span>Ground speed</span><span id="csSpeed" class="cs-val">-</span>
+                                    </div>
+                                    <pre class="cs-log" id="csLog"></pre>
+                                </div>
+                                </div>
+                                <!-- CloudSurf: end -->
