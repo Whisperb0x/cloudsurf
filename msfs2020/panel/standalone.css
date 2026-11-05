@@ -1,0 +1,457 @@
+/* CloudSurf's toolbar panel. Keep the styling inside the panel so the game
+   chrome stays native while the controls read like a compact flight console. */
+html,
+body,
+ingamepanel-cloudsurf,
+#CloudSurfPanel {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	margin: 0;
+	color: #e8f0f7;
+}
+
+body {
+	overflow: hidden;
+	background: transparent;
+	font-family: Roboto, "Segoe UI", Arial, sans-serif;
+}
+
+ingamepanel-cloudsurf {
+	display: block;
+}
+
+#CloudSurfPanel {
+	display: flex;
+	flex-direction: column;
+	background: #0b1420;
+	color: #e8f0f7;
+}
+
+/* The 2020 ingame-ui wrapper can collapse its light-DOM content when the
+   viewport is resized. Keep the content chain stretched to the frame. */
+#CloudSurfPanel .ingameUiContent,
+#CloudSurfPanel .ingameUiWrapper,
+#CloudSurfPanel #MainDisplay {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+.cs-scroll {
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-height: 0;
+	padding: 18px 20px 22px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	background: #0b1420;
+	color: #e8f0f7;
+	font-size: 15px;
+}
+
+.cs-topline {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin: 0 2px 14px;
+}
+.cs-overline {
+	margin: 0 0 3px;
+	color: #60cbd5;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 1.8px;
+	text-transform: uppercase;
+}
+.cs-title {
+	margin: 0;
+	color: #f3f7fb;
+	font-size: 22px;
+	font-weight: 600;
+	line-height: 1.15;
+}
+.cs-version {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 9px;
+	border: 1px solid #273849;
+	border-radius: 20px;
+	background: #111d2a;
+	color: #aebdca;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.5px;
+	white-space: nowrap;
+}
+.cs-version-dot {
+	width: 7px;
+	height: 7px;
+	margin-right: 7px;
+	border-radius: 50%;
+	background: #35c7cf;
+}
+
+/* Live state */
+.cs-status {
+	display: flex;
+	align-items: center;
+	min-height: 58px;
+	margin: 0 0 12px;
+	padding: 10px 14px;
+	border: 1px solid #26394a;
+	border-left: 3px solid #627487;
+	border-radius: 10px;
+	background: #111d2a;
+	box-sizing: border-box;
+}
+.cs-dot {
+	width: 11px;
+	height: 11px;
+	margin: 0 12px 0 1px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+	background: #778797;
+}
+.cs-status-text p { margin: 0; }
+.cs-status-main {
+	color: #edf4fa;
+	font-size: 16px;
+	font-weight: 650;
+}
+.cs-status-sub {
+	margin-top: 3px !important;
+	color: #91a1b1;
+	font-size: 12px;
+}
+.cs-in { border-left-color: #35d3a0; }
+.cs-in .cs-dot { background: #35d3a0; }
+.cs-fade { border-left-color: #e4bb61; }
+.cs-fade .cs-dot { background: #e4bb61; }
+.cs-clear { border-left-color: #52afd2; }
+.cs-clear .cs-dot { background: #52afd2; }
+.cs-off .cs-dot { background: #778797; }
+
+/* Main control card */
+.ctrl-master-big {
+	display: flex;
+	flex-direction: column;
+	padding: 16px 17px 13px;
+	border: 1px solid #26394a;
+	border-radius: 12px;
+	background: #111d2a;
+	box-sizing: border-box;
+}
+.cs-box { align-items: stretch; }
+.ctrl-master-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 42px;
+	padding: 0 1px 13px;
+	border-bottom: 1px solid #26394a;
+}
+.cs-toggle-copy p {
+	margin: 0;
+	color: #edf4fa;
+	font-size: 16px;
+	font-weight: 650;
+}
+.cs-toggle-copy span {
+	display: block;
+	margin-top: 3px;
+	color: #91a1b1;
+	font-size: 12px;
+}
+.cs-switch {
+	position: relative;
+	display: block;
+	width: 46px;
+	height: 26px;
+	margin-left: 14px;
+	flex: 0 0 auto;
+	cursor: pointer;
+}
+.cs-switch input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	op: 12px;
+	left: 12px;
+	opacity: 0;
+}
+.cs-switch-track {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 46px;
+	height: 26px;
+	border: 1px solid #405263;
+	border-radius: 14px;
+	background: #344353;
+	box-sizing: border-box;
+}
+.cs-switch-track:after {
+	content: "";
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: #f4f8fb;
+}
+.cs-switch input:checked + .cs-switch-track {
+	border-color: #34bdc9;
+	background: #168b9b;
+}
+.cs-switch input:checked + .cs-switch-track:after { left: 23px; }
+.cs-switch input:focus + .cs-switch-track {
+	box-shadow: 0 0 0 3px rgba(52, 189, 201, 0.24);
+}
+
+.cs-section-head {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	margin: 15px 1px 8px;
+}
+.cs-label {
+	margin: 0;
+	color: #d7e1e9;
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 1.2px;
+	text-transform: uppercase;
+}
+.cs-caption {
+	margin: 4px 0 0;
+	color: #8293a3;
+	font-size: 11px;
+}
+.cs-profile-chip {
+	padding: 4px 8px;
+	border: 1px solid #23535e;
+	border-radius: 5px;
+	background: #102a34;
+	color: #69d8db;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 1px;
+}
+
+/* Five flight-friendly profiles */
+.cs-seg {
+	display: flex;
+	width: 100%;
+	box-sizing: border-box;
+}
+.cs-seg-btn {
+	min-width: 0;
+	min-height: 54px;
+	margin: 0 7px 0 0;
+	padding: 8px 7px;
+	border: 1px solid #334656;
+	border-radius: 8px;
+	background: #182635;
+	color: #d6e0e9;
+	flex: 1 1 0;
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.2;
+	text-align: center;
+	white-space: normal;
+	cursor: pointer;
+}
+.cs-seg-btn:last-child { margin-right: 0; }
+.cs-seg-btn span {
+	display: block;
+	margin-top: 4px;
+	color: #8293a3;
+	font-size: 10px;
+	font-weight: 400;
+}
+.cs-seg-btn:hover { border-color: #4b7181; background: #1d3040; }
+.cs-seg-btn.cs-on {
+	border-color: #22aab8;
+	background: #123d49;
+	box-shadow: inset 0 0 0 1px rgba(34, 170, 184, 0.18);
+	color: #effcff;
+}
+.cs-seg-btn.cs-on span { color: #9fe0e5; }
+.cs-seg-btn:focus { outline: 2px solid #56d1dc; outline-offset: 2px; }
+
+.cs-quick-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	margin: 17px 1px 1px;
+}
+.cs-quick-head span {
+	color: #7f91a1;
+	font-size: 11px;
+}
+
+/* Slider rows */
+.ctrl-master-intensity {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	padding: 9px 1px 3px;
+}
+.ctrl-master-intensity p {
+	width: 100%;
+	margin: 0 0 5px;
+	color: #dce6ed;
+	font-size: 14px;
+}
+.ctrl-intensity-value {
+	margin-left: 6px;
+	color: #4bd6b2;
+	font-weight: 650;
+}
+.ctrl-slider-label {
+	width: 40px;
+	color: #7f91a1;
+	font-size: 10px;
+	text-align: center;
+}
+.ctrl-slider-wrapper {
+	min-width: 70px;
+	flex: 1 1 auto;
+}
+.ctrl-slider-wrapper input[type="range"] {
+	display: block;
+	width: 100%;
+	height: 22px;
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	appearance: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+.ctrl-slider-wrapper input[type="range"]::-webkit-slider-runnable-track {
+	height: 5px;
+	border-radius: 4px;
+	background: #263c4a;
+}
+.ctrl-slider-wrapper input[type="range"]::-webkit-slider-thumb {
+	width: 16px;
+	height: 16px;
+	margin-top: -5.5px;
+	border: 3px solid #e9fbfd;
+	border-radius: 50%;
+	background: #18b7c7;
+	box-shadow: 0 0 0 2px rgba(24, 183, 199, 0.2);
+	-webkit-appearance: none;
+}
+.ctrl-slider-wrapper input[type="range"]:focus { outline: none; }
+.ctrl-slider-wrapper input[type="range"]:focus::-webkit-slider-thumb {
+	box-shadow: 0 0 0 4px rgba(24, 183, 199, 0.28);
+}
+.cs-row { margin-top: 0; }
+.cs-hint {
+	margin: 11px 1px 0;
+	color: #8192a1;
+	font-size: 11px;
+}
+
+/* Advanced controls keep the same visual language and remain scrollable. */
+.ctrl-section-label {
+	margin: 18px 2px 8px;
+	color: #62cbd3;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 1.6px;
+	text-transform: uppercase;
+}
+.cs-auto {
+	margin: 5px 0 8px 17px;
+	padding: 0;
+	color: #afbecb;
+	font-size: 12px;
+}
+.cs-auto li { margin: 4px 0; }
+.cs-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	margin-top: 10px;
+}
+.cs-effect {
+	display: flex;
+	align-items: center;
+	margin-top: 8px;
+}
+.cs-effect p { margin: 0 12px 0 0; color: #dce6ed; }
+.cs-effect .cs-btn { margin: 0 7px; }
+.cs-btn {
+	margin: 0 7px 7px 0;
+	padding: 7px 12px;
+	border: 1px solid #3b5060;
+	border-radius: 6px;
+	background: #1a2a38;
+	color: #e5eef5;
+	font-family: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+.cs-btn:hover { border-color: #5f8593; background: #213747; }
+.cs-btn-main { border-color: #159aaa; background: #126876; color: #fff; }
+.cs-btn-main:hover { background: #168090; }
+.cs-grid {
+	display: flex;
+	flex-wrap: wrap;
+	margin-top: 10px;
+	font-size: 12px;
+}
+.cs-grid span {
+	width: 50%;
+	padding: 4px 0;
+	border-bottom: 1px solid rgba(83, 106, 124, 0.24);
+	box-sizing: border-box;
+	color: #8fa1b0;
+}
+.cs-grid .cs-val { color: #e1eaf0; font-weight: 600; }
+.cs-ok { color: #4bd6b2 !important; }
+.cs-bad { color: #f28b83 !important; }
+.cs-log {
+	min-height: 4em;
+	margin-top: 10px;
+	padding: 8px 10px;
+	border: 1px solid #253747;
+	border-radius: 6px;
+	background: #0c1621;
+	color: #9aabba;
+	font-family: monospace;
+	font-size: 11px;
+	white-space: pre-wrap;
+}
+.cs-cal-row {
+	display: flex;
+	align-items: center;
+	margin: 5px 0;
+	color: #cdd8e1;
+	font-size: 12px;
+}
+.cs-cal-row span { flex: 1 1 auto; }
+.cs-cal-row .cs-btn { margin: 0 0 0 7px; padding: 4px 8px; }
+
+@media (max-width: 620px) {
+	.cs-scroll { padding: 14px 13px 18px; }
+	.cs-title { font-size: 19px; }
+	.ctrl-master-big { padding: 13px 12px 11px; }
+	.cs-seg { flex-wrap: wrap; }
+	.cs-seg-btn { flex: 1 1 30%; margin: 0 6px 6px 0; }
+	.cs-seg-btn:nth-child(3n) { margin-right: 0; }
+	.cs-seg-btn:last-child { margin-right: 0; }
+	.cs-profile-chip { margin-left: 8px; }
+}
