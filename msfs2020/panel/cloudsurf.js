@@ -1,0 +1,649 @@
+// CloudSurf controls + debugger for the CloudSurf toolbar panel.
+// Talks to the CloudSurf WASM module only through L:CLOUDSURF_* vars.
+(function () {
+	// Must match kConfigVars in CloudSurf.cpp (same defaults). MAIN sliders
+	// show on the main page (kept simple); the rest are under "Advanced".
+	// Everything else follows the sim on its own (see the Automatic box).
+	const MAIN = ["SIZE", "ENTRY_RAMP", "LEAD_MAX", "EXIT_FADE"];
+	const SLIDERS = [
+		["MAX_ALIVE",    "Clouds around you (Auto: at most)", 10, 128, 1, 128, ""],
+		["MULT",         "Thickness",             0,  2,   0.05, 2.0,  "x"],
+		["SIZE",         "Cloud size",            0.5, 2.5, 0.05, 1.65, "x"],
+		["BRIGHT",       "Brightness (times the automatic one)", 0.2, 3, 0.05, 1.0, "x"],
+		["INTENSITY",    "Intensity (0 = practically off)", 0, 100, 1, 100, "%"],
+		["GLOW",         "Aircraft lights (beta: glow in cloud)", 0, 30, 0.05, 0.85, "x"],
+		["ENTRY_RAMP",   "Build-up after entering a cloud", 50, 800, 10, 250, "m"],
+		["LEAD_MAX",     "Spawn distance (thin cloud; thick cloud half of it)", 300, 2500, 10, 1000, "m"],
+		["EXIT_FADE",    "Fade-out after leaving (the clouds still ahead)", 0.3, 5, 0.1, 1.5, "s"],
+		["LATERAL",      "Sideways spread",       20, 200, 1,    100,  "m"],
+		["VERTICAL",     "Vertical spread (less when climbing steeply)", 0, 150, 1, 100, "m"],
+		["CLUSTER",      "Clouds per step",       1,  16,  1,    8,    ""],
+		["FULL_PCT",     "Sim density for full thickness", 3, 40, 1, 10, "%"],
+		["TEST_DENS",    "Test mode density",     0,  1,   0.05, 1.0,  ""],
+		["BEAM_HDG",     "Landing light direction (heading)", -180, 180, 1, 1, "deg"],
+		["BEAM_PITCH",   "Landing light direction (pitch)", -90, 90, 1,  0,    "deg"],
+	];
+	// Performance presets: how many clouds there are at once and per step.
+	// Auto lets the module pick the number (up to MAX_ALIVE) so the frame rate
+	// in cloud stays within 10 % of the one before it. Moving one of these
+	// sliders yourself makes the preset "custom" (fixed, Auto off).
+	const PRESETS = {
+		auto:        { AUTO: 1, MAX_ALIVE: 128, CLUSTER: 8 },
+		performance: { AUTO: 0, MAX_ALIVE: 35, CLUSTER: 6 },
+		balanced:    { AUTO: 0, MAX_ALIVE: 60, CLUSTER: 8 },
+		quality:     { AUTO: 0, MAX_ALIVE: 100, CLUSTER: 10 },
+	};
+	const DEFAULT_PRESET = "auto";
+	// Settings without a control of their own (set by the presets).
+	// BEAM: the visible beam of mist stays off (it pointed backwards); the
+	// landing lights light up the clouds themselves.
+	const HIDDEN = [["AUTO", 1], ["BEAM", 0]];
+	// Effect labels, filled in by build.py in the same order as kEffects.
+	// L:CLOUDSURF_EFFECT is an index into it, or -1 for the mix (style Full).
+	const EFFECTS = /*@EFFECTS@*/[];
+	const DEFAULT_EFFECT = -1;
+	// The custom-texture wisps are experimental: only here, not on the main page.
+	const EFFECT_LABELS = { CloudSurf: "Classic", CloudSurfWisps: "Wisps only" };
+	const effectLabel = i => (i < 0 ? "Classic + wisps (thin cloud: wisps)" : EFFECT_LABELS[EFFECTS[i]] || EFFECTS[i] || "?");
+	const TOGGLES = [
+		["ENABLE",   "csEnable",  1],
+		["TEST",     "csTest",    0],
+		["LIT",      "csLit",     1],
+		["AHEAD",    "csAhead",   1],
+	];
+	const STORE_KEY = "CloudSurfSettings3";  // v3: 8 per step, wing clouds, wisps experimental
+
+	const $ = id => document.getElementById(id);
+	const getL = name => {
+		try { return SimVar.GetSimVarValue("L:CLOUDSURF_" + name, "number"); } catch (e) { return NaN; }
+	};
+	const setL = (name, v) => {
+		try { SimVar.SetSimVarValue("L:CLOUDSURF_" + name, "number", v); } catch (e) {}
+	};
+	const getA = (name, unit) => {
+		try { return SimVar.GetSimVarValue(name, unit); } catch (e) { return NaN; }
+	};
+
+	// The sim's own storage (dataStorage.js) survives a restart; localStorage
+	// in the panel did not, so it is only a fallback.
+	function loadStored(key) {
+		const sources = [
+			() => typeof GetStoredData === "function" ? GetStoredData(key) : null,
+			() => localStorage.getItem(key),
+		];
+		for (const get of sources) {
+			try {
+				const raw = get();
+				if (raw) return JSON.parse(raw);
+			} catch (e) {}
+		}
+		return null;
+	}
+	let settings = loadStored(STORE_KEY) || {};
+	// 800 m was the old default distance; it is 1200 m now.
+	if (settings.LEAD_MAX === 800) delete settings.LEAD_MAX;
+	// 25 % was the old density for full thickness; real decks rarely go over ~10 %.
+	if (settings.FULL_PCT === 25) delete settings.FULL_PCT;
+	// v4 defaults: lit by the sim's light, 120 x 50 m spread, dense and many.
+	if (!settings.__v4) {
+		["LIT", "LATERAL", "VERTICAL", "MULT", "MAX_ALIVE", "CLUSTER", "PRESET", "BRIGHT"].forEach(k => delete settings[k]);
+		settings.__v4 = true;
+	}
+	// v7: a box 100 m either side and 100 m up and down.
+	// v8 (1.1): spawn distance now per cloud thickness (default 1000 m) and
+	// Classic + wisps the default style
+	if (!settings.__v8) {
+		["LEAD_MAX", "EFFECT"].forEach(k => delete settings[k]);
+		settings.__v8 = true;
+	}
+	if (!settings.__v7) {
+		["LATERAL", "VERTICAL"].forEach(k => delete settings[k]);
+		settings.__v7 = true;
+	}
+	// v6: new clouds at 800 m, no beam of mist.
+	if (!settings.__v6) {
+		["LEAD_MAX", "BEAM", "BEAM_FWD", "BEAM_UP"].forEach(k => delete settings[k]);
+		settings.__v6 = true;
+	}
+	// v5: Auto FPS is the default.
+	if (!settings.__v5) {
+		["AUTO", "MAX_ALIVE", "CLUSTER", "PRESET"].forEach(k => delete settings[k]);
+		settings.__v5 = true;
+	}
+	const save = () => {
+		const raw = JSON.stringify(settings);
+		try { if (typeof SetStoredData === "function") SetStoredData(STORE_KEY, raw); } catch (e) {}
+		try { localStorage.setItem(STORE_KEY, raw); } catch (e) {}
+	};
+
+	function defaultOf(key) {
+		if (key === "EFFECT") return DEFAULT_EFFECT;
+		if (key === "PRESET") return DEFAULT_PRESET;
+		const s = SLIDERS.find(x => x[0] === key);
+		if (s) return s[5];
+		const t = TOGGLES.find(x => x[0] === key);
+		if (t) return t[2];
+		const h = HIDDEN.find(x => x[0] === key);
+		return h ? h[1] : 0;
+	}
+	const valueOf = key => (key in settings ? settings[key] : defaultOf(key));
+
+	function fmt(v, step) {
+		const decimals = step < 0.1 ? 2 : step < 1 ? 1 : 0;
+		return Number(v).toFixed(decimals);
+	}
+
+	function showSlider(key) {
+		const s = SLIDERS.find(x => x[0] === key);
+		$("cs_" + key).value = valueOf(key);
+		$("csVal_" + key).textContent = fmt(valueOf(key), s[4]) + s[6];
+	}
+
+	function buildSliders() {
+		// the main page's sliders in MAIN's order, then the rest
+		const ordered = [...MAIN.map(k => SLIDERS.find(s => s[0] === k)), ...SLIDERS.filter(s => !MAIN.includes(s[0]))];
+		ordered.forEach(([key, label, min, max, step, , unit]) => {
+			const box = $(MAIN.includes(key) ? "csMain" : "csSliders");
+			const row = document.createElement("div");
+			row.className = "ctrl-master-intensity cs-row";
+			row.innerHTML =
+				`<p>${label} <span id="csVal_${key}" class="ctrl-intensity-value"></span></p>` +
+				`<span class="ctrl-slider-label">${min}</span>` +
+				`<div class="ctrl-slider-wrapper"><input type="range" id="cs_${key}" min="${min}" max="${max}" step="${step}" /></div>` +
+				`<span class="ctrl-slider-label">${max}</span>`;
+			box.appendChild(row);
+			showSlider(key);
+			row.querySelector("input").addEventListener("input", e => {
+				const v = parseFloat(e.target.value);
+				settings[key] = v;
+				$("csVal_" + key).textContent = fmt(v, step) + unit;
+				setL(key, v);
+				if (Object.keys(PRESETS.balanced).includes(key)) {
+					settings.PRESET = "custom";
+					settings.AUTO = 0;
+					setL("AUTO", 0);
+				}
+				save();
+				showChoices();
+			});
+		});
+	}
+
+	function bindToggles() {
+		TOGGLES.forEach(([key, id]) => {
+			const el = $(id);
+			if (!el) return;
+			el.checked = valueOf(key) > 0.5;
+			el.addEventListener("change", () => {
+				settings[key] = el.checked ? 1 : 0;
+				setL(key, settings[key]);
+				if (key !== "TEST") save();  // test mode is never remembered
+			});
+		});
+	}
+
+	// --- style and performance buttons --------------------------------------
+
+	const setOn = (el, on) => (on ? el.classList.add("cs-on") : el.classList.remove("cs-on"));
+
+	// Advanced is the fifth Performance button: your own settings ("custom")
+	// and the whole list in place of the main page's few sliders, with what
+	// is automatic, Calibrate and the debug tools. A preset closes it again.
+	let advancedOpen = false;
+
+	function setAdvancedView(open) {
+		if (open === advancedOpen) return;
+		advancedOpen = open;
+		const rows = MAIN.map(key => $("cs_" + key).closest(".cs-row"));
+		if (open) rows.reverse().forEach(row => $("csSliders").insertBefore(row, $("csSliders").firstChild));
+		else rows.forEach(row => $("csMain").appendChild(row));
+		$("csMain").style.display = open ? "none" : "block";
+		$("csDebug").style.display = open ? "block" : "none";
+		// Calibrate lives under Advanced: leaving it ends live tuning too
+		if (!open && $("csCalOpen").checked) {
+			$("csCalOpen").checked = false;
+			$("csCalOpen").dispatchEvent(new Event("change"));
+		}
+	}
+
+	function showChoices() {
+		const effect = valueOf("EFFECT"), preset = valueOf("PRESET");
+		const advanced = preset === "custom";
+		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b => {
+			const name = b.getAttribute("data-preset");
+			const selected = name === "advanced" ? advanced : name === preset;
+			setOn(b, selected);
+			b.setAttribute("aria-pressed", selected ? "true" : "false");
+		});
+		const chip = $("csProfileChip");
+		if (chip) chip.textContent = advanced ? "CUSTOM" : String(preset || DEFAULT_PRESET).toUpperCase();
+		setAdvancedView(advanced);
+		$("csEffectName").textContent = `${effect + 2}/${EFFECTS.length + 1}  ${effectLabel(effect)}`;
+	}
+
+	function setEffect(i) {
+		settings.EFFECT = i;
+		setL("EFFECT", i);
+		save();
+		showChoices();
+		log("effect: " + effectLabel(i));
+	}
+
+	function stepEffect(delta) {
+		const n = EFFECTS.length + 1;  // the mix first
+		setEffect((valueOf("EFFECT") + 1 + delta + n) % n - 1);
+	}
+
+	function setPreset(name) {
+		if (name === "advanced") {  // your own settings: nothing changes, the whole list shows
+			settings.PRESET = "custom";
+			save();
+			showChoices();
+			return;
+		}
+		settings.PRESET = name;
+		Object.keys(PRESETS[name]).forEach(key => {
+			settings[key] = PRESETS[name][key];
+			setL(key, settings[key]);
+			if (SLIDERS.some(s => s[0] === key)) showSlider(key);
+		});
+		save();
+		showChoices();
+		log("performance: " + name);
+	}
+
+	// Push stored settings to the module. INIT=1 stops the module from
+	// overwriting them with its own defaults.
+	function applyAll() {
+		setL("EFFECT", valueOf("EFFECT"));
+		SLIDERS.forEach(([key]) => setL(key, valueOf(key)));
+		TOGGLES.forEach(([key, id]) => setL(key, $(id) && $(id).checked ? 1 : 0));
+		HIDDEN.forEach(([key]) => setL(key, valueOf(key)));
+		sendCal();
+		setL("INIT", 1);
+	}
+
+	function resetAll() {
+		settings = {};
+		save();
+		SLIDERS.forEach(([key]) => showSlider(key));
+		TOGGLES.forEach(([key, id, def]) => { if ($(id)) $(id).checked = def > 0.5; });
+		showChoices();
+		applyAll();
+		log("settings reset to defaults");
+	}
+
+	// --- cloud layers -------------------------------------------------------
+	// The sim's own weather panel API (JS_LISTENER_WEATHER; internal, not an
+	// official SDK API) gives the active weather's cloud layers. They go to the
+	// module as L:CLOUDSURF_LAYERS (count, 0 = unknown), LAYER<n>_BOT/_TOP
+	// (feet), _COV (0..1), _DENS and LAYERS_AGL. Without it CloudSurf still
+	// works, only without knowing the layers.
+
+	let layers = [], layersAgl = false;
+
+	function coverWord(c) {
+		return c < 0.15 ? "few" : c < 0.5 ? "scattered" : c < 0.85 ? "broken" : "overcast";
+	}
+	const feet = v => String(Math.round(v / 100) * 100).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+	function layersText() {
+		if (!layers.length) return "";
+		return layers.map(l => `${feet(l.bot)}-${feet(l.top)} ft ${coverWord(l.cov)}`).join("  ·  ") +
+		       (layersAgl ? " (above ground)" : "");
+	}
+
+	function writeLayers(data) {
+		const value = (l, key) => (l && l[key] ? Number(l[key].value) || 0 : 0);
+		layers = ((data && data.tCloudLayers) || [])
+			.map(l => ({ bot: value(l, "dvAltitudeBot"), top: value(l, "dvAltitudeTop"),
+			             cov: value(l, "dvCoverageRatio") / 100, dens: value(l, "dvDensityMultiplier") }))
+			.filter(l => l.top > l.bot && l.cov > 0);
+		layersAgl = !!(data && data.oSettings && data.oSettings.bIsAltitudeAMGL);
+		layers.forEach((l, i) => {
+			setL(`LAYER${i + 1}_BOT`, l.bot);
+			setL(`LAYER${i + 1}_TOP`, l.top);
+			setL(`LAYER${i + 1}_COV`, l.cov);
+			setL(`LAYER${i + 1}_DENS`, l.dens);
+		});
+		setL("LAYERS_AGL", layersAgl ? 1 : 0);
+		setL("LAYERS", layers.length);
+	}
+
+	function startLayers() {
+		if (typeof RegisterViewListener !== "function") return;
+		try {
+			let listener = null;
+			const ask = () => { try { if (listener) listener.trigger("ASK_UPDATE_PRESET"); } catch (e) {} };
+			listener = RegisterViewListener("JS_LISTENER_WEATHER", ask);
+			listener.on("UpdatePreset", writeLayers);
+			setInterval(ask, 10000);  // the weather can change in flight
+		} catch (e) {
+			log("cloud layers not available");
+		}
+	}
+
+	// --- calibration ----------------------------------------------------------
+	// Points tuned by hand per sim cloud density (see Calibrate in
+	// CloudSurf.cpp), each { pct, DENS, SIZE, ... }, kept in the sim's storage
+	// and sent as L:CLOUDSURF_CAL_N, CAL<i>_PCT, CAL<i>_<key> and CAL_VER.
+	// While the Calibrate box is open L:CLOUDSURF_CAL_MODE is 1 and the
+	// sliders act live (LIVE_<key>).
+	// Cal1 held absolute brightness; since then brightness is automatic and
+	// the calibrated value multiplies it, so those points are not used.
+	const CAL_KEY = "CloudSurfCal2";
+	const CAL_KEYS = ["DENS", "SIZE", "COUNT", "WING", "BRIGHT", "SPACING", "LEAD",
+	                  "CLASSIC", "WISPS", "LATERAL", "VERTICAL", "GLOW"];
+	const CAL_SLIDERS = [
+		["DENS",     "Cloud density",           0,   2,    0.05, "x"],
+		["SIZE",     "Cloud size",              0.5, 2.5,  0.05, "x"],
+		["COUNT",    "Number of clouds",        10,  128,  1,    ""],
+		["BRIGHT",   "Brightness (times the automatic one)", 0.2, 3, 0.05, "x"],
+		["GLOW",     "Glow from your lights",   0,   30,   0.05, "x"],
+		["SPACING",  "New clouds every",        10,  400,  5,    "m"],
+		["LEAD",     "Spawn distance ahead",    200, 2500, 10,   "m"],
+		["WISPS",    "Wisps (atlas) share",     0,   1,    0.05, ""],
+		["LATERAL",  "Spread sideways",         20,  200,  1,    "m"],
+		["VERTICAL", "Spread up/down",          0,   150,  1,    "m"],
+	];
+	const CAL_TOLERANCE = 0.1;  // a new point within 10 % (at least 0.3 %) replaces the old one
+	let calPoints = loadStored(CAL_KEY) || [];
+	let calLive = {};
+	const pctSamples = [];  // the last 5 s of the module's density, for Confirm
+
+	function sendCal() {
+		calPoints.forEach((p, i) => {
+			setL(`CAL${i + 1}_PCT`, p.pct);
+			CAL_KEYS.forEach(k => setL(`CAL${i + 1}_${k}`, k in p ? p[k] : valueOf(k)));  // older points: the normal value
+		});
+		setL("CAL_N", calPoints.length);
+		setL("CAL_VER", Date.now() % 1000000000);
+	}
+
+	function saveCal() {
+		calPoints.sort((a, b) => a.pct - b.pct);
+		const raw = JSON.stringify(calPoints);
+		try { if (typeof SetStoredData === "function") SetStoredData(CAL_KEY, raw); } catch (e) {}
+		try { localStorage.setItem(CAL_KEY, raw); } catch (e) {}
+		sendCal();
+		renderCalList();
+	}
+
+	function setLive(key, v) {
+		calLive[key] = v;
+		setL("LIVE_" + key, v);
+		const s = CAL_SLIDERS.find(x => x[0] === key);
+		if (s) {
+			$("csCal_" + key).value = v;
+			$("csCalVal_" + key).textContent = fmt(v, s[4]) + s[5];
+		} else if (key === "CLASSIC") {
+			$("csCalClassic").checked = v >= 0.5;
+		}
+	}
+
+	function setLiveAll(values) {
+		CAL_KEYS.forEach(k => {
+			const s = CAL_SLIDERS.find(x => x[0] === k);
+			let v = Number(values[k]) || 0;
+			if (k === "CLASSIC") v = v >= 0.5 ? 1 : 0;
+			else if (s) v = Math.round(v / s[4]) * s[4];  // on the slider's steps
+			setLive(k, Number(v.toFixed(2)));
+		});
+	}
+
+	// What the stored points (or the normal settings) give at this density.
+	function loadHere() {
+		const values = {};
+		CAL_KEYS.forEach(k => { values[k] = getL("CAL_INT_" + k); });
+		setLiveAll(values);
+		log("calibrate: loaded the values for here");
+	}
+
+	const pctAvg = () => (pctSamples.length ? pctSamples.reduce((a, b) => a + b, 0) / pctSamples.length : NaN);
+
+	function confirmCal() {
+		const pct = pctAvg();
+		if (!(pct >= 0.3) || !(getL("PCT") >= 0.3)) {
+			log("calibrate: not in a cloud, nothing stored");
+			return;
+		}
+		const point = { pct: Math.round(pct * 100) / 100 };
+		CAL_KEYS.forEach(k => { point[k] = calLive[k]; });
+		const tol = Math.max(0.3, pct * CAL_TOLERANCE);
+		const old = calPoints.findIndex(p => Math.abs(p.pct - pct) <= tol);
+		if (old >= 0) calPoints.splice(old, 1);
+		calPoints.push(point);
+		saveCal();
+		log(`calibrate: ${old >= 0 ? "replaced" : "stored"} the point for ${point.pct.toFixed(1)} %`);
+	}
+
+	const glowOf = p => ("GLOW" in p ? p.GLOW : valueOf("GLOW"));
+
+	function renderCalList() {
+		const box = $("csCalList");
+		if (!box) return;
+		box.innerHTML = "";
+		if (!calPoints.length) {
+			box.innerHTML = '<div class="cs-cal-row"><span>None yet: the normal settings apply.</span></div>';
+			return;
+		}
+		calPoints.forEach((p, i) => {
+			const row = document.createElement("div");
+			row.className = "cs-cal-row";
+			row.innerHTML =
+				`<span>${p.pct.toFixed(1)} %: density ${fmt(p.DENS, 0.01)}, size ${fmt(p.SIZE, 0.01)}, ` +
+				`${p.COUNT} clouds, every ${p.SPACING} m, ${p.LEAD} m ahead, glow ${fmt(glowOf(p), 0.01)}</span>` +
+				`<button class="cs-btn" data-load="${i}">Load</button><button class="cs-btn" data-del="${i}">Delete</button>`;
+			box.appendChild(row);
+		});
+		box.querySelectorAll("[data-load]").forEach(b => b.addEventListener("click", () => {
+			setLiveAll(calPoints[+b.getAttribute("data-load")]);
+			log("calibrate: loaded a stored point");
+		}));
+		box.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => {
+			const p = calPoints.splice(+b.getAttribute("data-del"), 1)[0];
+			saveCal();
+			log(`calibrate: deleted the point for ${p.pct.toFixed(1)} %`);
+		}));
+	}
+
+	function buildCal() {
+		CAL_SLIDERS.forEach(([key, label, min, max, step]) => {
+			const row = document.createElement("div");
+			row.className = "ctrl-master-intensity cs-row";
+			row.innerHTML =
+				`<p>${label} <span id="csCalVal_${key}" class="ctrl-intensity-value"></span></p>` +
+				`<span class="ctrl-slider-label">${min}</span>` +
+				`<div class="ctrl-slider-wrapper"><input type="range" id="csCal_${key}" min="${min}" max="${max}" step="${step}" /></div>` +
+				`<span class="ctrl-slider-label">${max}</span>`;
+			$("csCalSliders").appendChild(row);
+			row.querySelector("input").addEventListener("input", e => setLive(key, parseFloat(e.target.value)));
+		});
+		$("csCalClassic").addEventListener("change", () => setLive("CLASSIC", $("csCalClassic").checked ? 1 : 0));
+		$("csCalOpen").addEventListener("change", () => {
+			const on = $("csCalOpen").checked;
+			$("csCal").style.display = on ? "block" : "none";
+			if (on) loadHere();
+			setL("CAL_MODE", on ? 1 : 0);
+			log(on ? "calibrate: live tuning on" : "calibrate: off, stored points apply");
+		});
+		$("csCalConfirm").addEventListener("click", confirmCal);
+		$("csCalLoad").addEventListener("click", loadHere);
+		let armed = 0;
+		$("csCalClear").addEventListener("click", () => {
+			if (Date.now() - armed > 3000) {
+				armed = Date.now();
+				$("csCalClear").textContent = "Click again to delete all";
+				setTimeout(() => { $("csCalClear").textContent = "Delete all points"; }, 3000);
+				return;
+			}
+			calPoints = [];
+			saveCal();
+			$("csCalClear").textContent = "Delete all points";
+			log("calibrate: all points deleted");
+		});
+		setL("CAL_MODE", 0);
+		renderCalList();
+	}
+
+	function tickCal() {
+		const pct = getL("PCT");
+		pctSamples.push(pct >= 0.3 ? pct : NaN);
+		if (pctSamples.length > 20) pctSamples.shift();
+		if (pctSamples.some(isNaN)) pctSamples.length = 0;  // left the cloud: start over
+		if (!$("csCalOpen").checked) return;
+		const avg = pctAvg();
+		setText("csCalPct", pct >= 0.3 ? `${pct.toFixed(1)} %  (last 5 s ${isNaN(avg) ? "-" : avg.toFixed(1) + " %"})` : "not in a cloud",
+		        pct >= 0.3 ? "cs-ok" : "");
+		const fps = getL("FPS"), base = getL("FPS_BASE");
+		setText("csCalFps", fps > 0 ? `${fps.toFixed(0)} fps` + (base > 0 ? ` (${Math.round(100 * fps / base)} % of before the cloud)` : "") : "-");
+		const lead = calLive.LEAD || 0;
+		const reach = (calLive.COUNT || 0) / Math.max(1, valueOf("CLUSTER")) * (calLive.SPACING || 0) - 100;
+		setText("csCalReach", reach >= lead ? `all the way (${lead} m)` :
+		        `only ${Math.max(0, reach).toFixed(0)} of ${lead} m: more clouds or a larger spacing`, reach >= lead ? "cs-ok" : "cs-bad");
+		const btn = $("csCalConfirm");
+		if (btn) btn.textContent = isNaN(avg) ? "Confirm (fly in a cloud)" : `Confirm for ${avg.toFixed(1)} %`;
+	}
+
+	// --- status and debugger ------------------------------------------------
+
+	const logLines = [];
+	function log(msg) {
+		const stamp = new Date().toTimeString().slice(0, 8);
+		logLines.unshift(`${stamp}  ${msg}`);
+		logLines.length = Math.min(logLines.length, 10);
+		const el = $("csLog");
+		if (el) el.textContent = logLines.join("\n");
+	}
+
+	let last = { spawns: null, fails: null, state: null, beat: null, beatAt: 0 };
+
+	function setText(id, text, cls) {
+		const el = $(id);
+		if (!el) return;
+		el.textContent = text;
+		el.className = "cs-val" + (cls ? " " + cls : "");
+	}
+
+	function showStatus(running, inCloud, cloudPct, effectPct, active, fade, densityFallback) {
+		let state, main, sub;
+		if (!running) {
+			state = "off"; main = last.beat > 0 ? "Paused" : "Waiting for the sim";
+			sub = last.beat > 0 ? "CloudSurf resumes when the sim runs" : "The CloudSurf module is not loaded yet";
+		} else if (!$("csEnable").checked) {
+			state = "off"; main = "Off"; sub = "Switch on \"Fly through clouds\"";
+		} else if (inCloud > 0.5) {
+			state = "in"; main = "In cloud";
+			sub = densityFallback
+				? `MSFS reports ${cloudPct.toFixed(2)} % · CloudSurf uses ${effectPct.toFixed(1)} % minimum · ${active} clouds`
+				: `${cloudPct.toFixed(2)} % reported density · ${active} clouds around you`;
+		} else if (getL("EARLY") > 0.5) {
+			state = "in"; main = "Entering a cloud layer";
+			sub = `Clouds placed ahead  ·  ${layersText()}`;
+		} else if (fade > 0.01 && active > 0) {
+			state = "fade"; main = "Leaving cloud"; sub = "The last clouds are passing";
+		} else if ($("csTest").checked) {
+			state = "in"; main = "Test mode"; sub = `${active} test clouds  ·  also in clear sky`;
+		} else {
+			state = "clear"; main = "Clear air";
+			sub = layers.length ? "Cloud layers: " + layersText() : "Clouds start as soon as you fly into one";
+		}
+		$("csStatus").className = "cs-status cs-" + state;
+		$("csStatusMain").textContent = main;
+		$("csStatusSub").textContent = sub;
+	}
+
+	function tick() {
+		const beat = getL("HEARTBEAT");
+		const now = Date.now();
+		if (beat !== last.beat) { last.beat = beat; last.beatAt = now; }
+		const running = last.beat > 0 && now - last.beatAt < 2000;
+		setText("csRunning", running ? "running" : (last.beat > 0 ? "paused / not updating" : "not loaded"),
+		        running ? "cs-ok" : "cs-bad");
+
+		const active = getL("ACTIVE"), spawns = getL("SPAWNS"), fails = getL("FAILS");
+		const state = getL("STATE"), dens = getL("DENS"), lead = getL("LAST_LEAD"), fade = getL("FADE");
+		const inCloud = getA("A:AMBIENT IN CLOUD", "bool");
+		const cloudPct = getA("A:ENV CLOUD DENSITY", "percent");
+		const effectPct = getL("PCT");
+		const densityFallback = getL("DENS_FALLBACK") > 0.5;
+		const camera = getA("A:CAMERA STATE", "enum");
+		const gs = getA("A:GROUND VELOCITY", "knots");
+
+		showStatus(running, inCloud, isNaN(cloudPct) ? 0 : cloudPct,
+		          isNaN(effectPct) ? 0 : effectPct, isNaN(active) ? 0 : active, fade, densityFallback);
+		setText("csState", state > 0.5 ? "spawning" : "idle", state > 0.5 ? "cs-ok" : "");
+		setText("csInCloud", inCloud > 0.5 ? "yes" : "no", inCloud > 0.5 ? "cs-ok" : "");
+		setText("csCloudPct", isNaN(cloudPct) ? "-" :
+		        `${cloudPct.toFixed(2)} % MSFS  ·  ${isNaN(effectPct) ? "-" : effectPct.toFixed(2)} % effect${densityFallback ? " (floor)" : ""}`);
+		setText("csDens", isNaN(dens) ? "-" : dens.toFixed(2));
+		setText("csFade", isNaN(fade) ? "-" : fade.toFixed(2));
+		const tone = getL("TONE"), sun = getL("SUN"), vis = getL("VIS");
+		setText("csTone", isNaN(tone) ? "-" : `${tone.toFixed(2)}  (sun ${isNaN(sun) ? "-" : sun.toFixed(0)}°)`);
+		setText("csVis", vis > 0 ? `${vis.toFixed(0)} m` : "-");
+		const fps = getL("FPS"), fpsBase = getL("FPS_BASE"), cap = getL("CAP");
+		setText("csAutoFps", valueOf("AUTO") < 0.5 ? "off (fixed number)" :
+		        fpsBase > 0 ? `${fps.toFixed(0)} fps (before cloud ${fpsBase.toFixed(0)}), up to ${cap} clouds`
+		                    : `measuring, up to ${cap} clouds`);
+		const leadNow = getL("LEAD_NOW");
+		setText("csLeadNow", leadNow > 0 ? `${leadNow.toFixed(0)} m` : "-");
+		const deckTop = getL("DECK_TOP"), deckBot = getL("DECK_BOT");
+		setText("csDeck", deckTop > 0 ? `${feet(deckBot)}-${feet(deckTop)} ft` : "-");
+		const layerNow = getL("LAYER");
+		setText("csLayers", layers.length ? `${layers.length}, in #${layerNow || "-"}` : "unknown");
+		const change = getL("CHANGE");
+		setText("csChange", isNaN(change) || change === 0 ? "steady" :
+		        (change > 0 ? "thicker " : "thinner ") + Math.abs(change).toFixed(2));
+		setText("csActive", isNaN(active) ? "-" : String(active));
+		setText("csSpawns", isNaN(spawns) ? "-" : String(spawns));
+		setText("csFails", isNaN(fails) ? "-" : String(fails), fails > 0 ? "cs-bad" : "");
+		setText("csCamera", camera === 2 ? "cockpit" : isNaN(camera) ? "-" : "external (" + camera + ")");
+		setText("csSpeed", isNaN(gs) ? "-" : gs.toFixed(0) + " kt");
+
+		if (last.spawns !== null && spawns > last.spawns)
+			log(`spawned ${spawns - last.spawns} cloud(s), last at ${lead.toFixed(0)} m ahead`);
+		if (last.fails !== null && fails > last.fails)
+			log(`spawn FAILED (${fails} total) - try a smaller nearest distance`);
+		if (last.state !== null && state !== last.state)
+			log(state > 0.5 ? "cloud entered, spawning" : "left cloud, no new clouds");
+		last.spawns = spawns; last.fails = fails; last.state = state;
+	}
+
+	function init() {
+		if (!$("csSliders")) return;
+		buildSliders();
+		buildCal();
+		bindToggles();
+		showChoices();
+		applyAll();
+		startLayers();
+		document.querySelectorAll("#csPreset .cs-seg-btn").forEach(b =>
+			b.addEventListener("click", () => setPreset(b.getAttribute("data-preset"))));
+		$("csEffectPrev").addEventListener("click", () => stepEffect(-1));
+		$("csEffectNext").addEventListener("click", () => stepEffect(1));
+		$("csSpawnNow").addEventListener("click", () => { setL("SPAWN_NOW", 1); log("spawn requested"); });
+		$("csClear").addEventListener("click", () => { setL("CLEAR", 1); log("all clouds cleared"); });
+		$("csReset").addEventListener("click", resetAll);
+		// The module may load after the panel; re-apply once it is alive.
+		let applied = false, toggles = -1;
+		setInterval(() => {
+			tick();
+			tickCal();
+			// the hotkey (Ctrl+Shift+C) switched CloudSurf on or off: take that over
+			const t = getL("TOGGLES");
+			if (last.beat > 0 && t !== toggles) {
+				if (t > 0 && (toggles >= 0 || !applied)) {
+					settings.ENABLE = getL("ENABLE") > 0.5 ? 1 : 0;
+					$("csEnable").checked = settings.ENABLE > 0.5;
+					save();
+					log(`hotkey: CloudSurf ${settings.ENABLE ? "on" : "off"}`);
+				}
+				toggles = t;
+			}
+			if (!applied && last.beat > 0) { applyAll(); applied = true; log("module found, settings applied"); }
+		}, 250);
+		log("panel loaded");
+	}
+
+	if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+	else init();
+})();

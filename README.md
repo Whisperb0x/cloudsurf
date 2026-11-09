@@ -15,6 +15,10 @@ ActiveSky, StrataWx …): CloudSurf never changes the weather, it only reads it.
 - Own visual effects, material and textures.
 - WASM module, no external app needed while flying.
 
+## MSFS 2020 port
+
+A separate port targets Microsoft Flight Simulator 2020 and its SDK. Its source and package project live in [`msfs2020/`](msfs2020/README.md), alongside the existing MSFS 2024 project.
+
 ## Install (users)
 
 1. Download a release and copy the `whisperb0x-cloudsurf` folder into your

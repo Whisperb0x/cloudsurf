@@ -1,0 +1,7 @@
+<VisualEffectLibrary Version="1.0.0">
+	<VisualEffect File="CloudSurf"/>
+	<VisualEffect File="CloudSurfWisps"/>
+	<VisualEffect File="CloudSurfBeam"/>
+	<VisualEffect File="CloudSurfWing"/>
+	<VisualEffect File="CloudSurfWingBig"/>
+</VisualEffectLibrary>

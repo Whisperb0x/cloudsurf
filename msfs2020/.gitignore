@@ -1,0 +1,10 @@
+out/
+src/effects_gen.h
+msfs-project/Packages/
+msfs-project/PackagesMetadata/
+msfs-project/_PackageInt/
+msfs-project/_PublishingGroupInt/
+msfs-project/*.xml.user
+msfs-project/PackageSources/Modules/
+msfs-project/PackageSources/html_ui/
+msfs-project/PackageSources/InGamePanels/
